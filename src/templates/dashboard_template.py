@@ -66,6 +66,13 @@ def render_dashboard(data: dict[str, Any]) -> str:
     team_inputs += ('<label style="font-size:.82rem;color:#555;display:inline-block">Productive days / week<br>'
                     '<input type="number" min="1" max="7" step="0.5" value="5" id="team_dpw" '
                     'style="width:74px;padding:.3rem;margin-top:.2rem;border:1px solid #ccc;border-radius:4px"></label>')
+    team_inputs += ('<label style="font-size:.82rem;color:#555;display:inline-block">GitHub Copilot for engineers<br>'
+                    '<select id="team_copilot" style="width:230px;padding:.34rem;margin-top:.2rem;border:1px solid #ccc;border-radius:4px">'
+                    '<option value="1" selected>None &mdash; no AI assistance</option>'
+                    '<option value="0.8">Copilot enabled &mdash; 20% faster</option>'
+                    '<option value="0.65">Copilot + agent mode &mdash; 35% faster</option>'
+                    '<option value="0.5">Copilot power users &mdash; 50% faster</option>'
+                    '</select></label>')
     views = {
         "overview": (
             '<div class="grid">'
@@ -105,8 +112,9 @@ def render_dashboard(data: dict[str, Any]) -> str:
             '<div><div class="kpi" id="team_people">0</div>Total head-count</div></div>'
             '<p id="team_detail" class="muted" style="margin:.5rem 0 0"></p>'
             '<p class="muted" style="margin:.3rem 0 0">Effective FTE = &Sigma; (head-count &times; role allocation %). '
-            'Calendar duration = total rebuild effort &divide; effective FTE, in working weeks. '
+            'Calendar duration = (total rebuild effort &times; Copilot factor) &divide; effective FTE, in working weeks. '
             'Percentages are each role&rsquo;s assumed hands-on rebuild allocation &mdash; adjust head-counts to model your delivery team. '
+            'The GitHub Copilot selector applies an AI productivity uplift that reduces the person-days engineers spend rebuilding artifacts. '
             'Respects the workspace filter.</p></div>'
             '<div class="card"><div class="kpi" id="mc_pipes">0</div>Pipelines assessed</div>'
             '<div class="card"><div class="kpi" id="mc_nbs">0</div>Notebooks assessed</div>'
@@ -236,6 +244,7 @@ function sync(){updWsCount();const a=active();document.querySelectorAll('tr[data
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.getElementById(b.dataset.view).classList.add('active');if(b.dataset.view==='spider')spider();if(b.dataset.view==='pipelineops')pipelineOps();if(b.dataset.view==='overview')overviewCharts();if(b.dataset.view==='fabready')fabReady();});
 document.querySelectorAll('.wsf').forEach(c=>c.onchange=()=>{sync();pipelineOps();overviewCharts();fabReady();if(document.getElementById('spider')&&document.getElementById('spider').closest('.view').classList.contains('active'))spider();});
 document.querySelectorAll('.teamc, #team_dpw').forEach(i=>i.oninput=recalcTeam);
+const _cp=document.getElementById('team_copilot');if(_cp)_cp.onchange=recalcTeam;
 function esc(v){return (''+(v==null?'':v)).replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));}
 function detail(rowjson,ws){let r={};try{r=JSON.parse(rowjson);}catch(e){}
  const isWs=('assessment_status' in r)||(r.name&&r.name===ws&&!('node_size' in r));
@@ -306,12 +315,15 @@ let mcEffort=0;
 function recalcTeam(){const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
  let cap=0,people=0;document.querySelectorAll('.teamc').forEach(i=>{const n=Math.max(0,parseFloat(i.value)||0);people+=n;cap+=n*(parseFloat(i.dataset.alloc)||0);});
  const dpwEl=document.getElementById('team_dpw');const dpw=Math.min(7,Math.max(1,parseFloat(dpwEl&&dpwEl.value)||5));
+ const cpEl=document.getElementById('team_copilot');const cp=Math.min(1,Math.max(0.1,parseFloat(cpEl&&cpEl.value)||1));
+ const effort=mcEffort*cp;
  set('team_people',people);set('team_capacity',cap.toFixed(1));
  const detail=document.getElementById('team_detail');
  if(cap<=0){set('team_weeks','\u2014');if(detail)detail.textContent='Add at least one engineer with a non-zero allocation to estimate a timeline.';return;}
- const days=mcEffort/cap;const weeks=days/dpw;const months=days/(dpw*4.33);
+ const days=effort/cap;const weeks=days/dpw;const months=days/(dpw*4.33);
  set('team_weeks',weeks.toFixed(1)+' wk');
- if(detail)detail.textContent=Math.round(days)+' working days (~'+months.toFixed(1)+' months) of elapsed time for '+mcEffort.toFixed(0)+' person-days of rebuild effort at '+cap.toFixed(1)+' effective FTE.';}
+ const saved=mcEffort-effort;const cpNote=cp<1?(' GitHub Copilot trims rebuild effort by '+Math.round((1-cp)*100)+'% (\u2212'+saved.toFixed(0)+' person-days, from '+mcEffort.toFixed(0)+'d).'):'';
+ if(detail)detail.textContent=Math.round(days)+' working days (~'+months.toFixed(1)+' months) of elapsed time for '+effort.toFixed(0)+' person-days of rebuild effort at '+cap.toFixed(1)+' effective FTE.'+cpNote;}
 function fabReady(){const a=active();const mc=(D.migration_complexity||[]).filter(r=>a.includes(r.workspace));const opt=(D.fabric_optimizations||[]).filter(o=>a.includes(o.workspace));const pipes=mc.filter(r=>r.artifact_type==='Pipeline'),nbs=mc.filter(r=>r.artifact_type==='Notebook'),dfs=mc.filter(r=>r.artifact_type==='Dataflow');const eff=mc.reduce((s,r)=>s+(r.estimated_effort_days||0),0);const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};set('mc_pipes',pipes.length);set('mc_nbs',nbs.length);set('mc_dfs',dfs.length);set('mc_effort',eff.toFixed(1)+'d');set('mc_opts',opt.length);mcEffort=eff;recalcTeam();const bands=['Low','Medium','High','Critical'];const items=bands.map(b=>({k:b,v:mc.filter(r=>r.complexity===b).length,c:MC_BAND_COLORS[b]}));svgBars(document.getElementById('mc_band'),items,onMcBand,mcBand);const fl=document.getElementById('mc_filter');if(fl)fl.textContent=mcBand?('Filtered to '+mcBand+' complexity — click the band again to clear.'):'';applyBandFilter();}
 let poPipeline=null;
 function poLineChart(svg,byDay){if(!svg)return;svg.innerHTML='';const NS=SVGNS;const mk=(t,at,tx)=>{const e=document.createElementNS(NS,t);for(const k in at)e.setAttribute(k,at[k]);if(tx!=null)e.textContent=tx;return e;};const days=Object.keys(byDay).sort();const W=1200,H=180,padL=40,padR=16,padT=14,padB=46,mx=Math.max(1,...Object.values(byDay)),n=days.length,iw=W-padL-padR;const xAt=i=>n>1?padL+iw*i/(n-1):padL+iw/2,yAt=v=>H-padB-(H-padT-padB)*v/mx;for(let q=0;q<=4;q++){const y=padT+(H-padT-padB)*q/4;svg.appendChild(mk('line',{x1:padL,y1:y,x2:W-padR,y2:y,stroke:'#eee'}));svg.appendChild(mk('text',{x:padL-6,y:y+4,'text-anchor':'end','font-size':11,fill:'#888'},Math.round(mx*(4-q)/4)));}if(!n)return;const pts=days.map((d,i)=>[xAt(i),yAt(byDay[d])]);let ap='M'+xAt(0)+','+(H-padB);pts.forEach(p=>ap+=' L'+p[0]+','+p[1]);ap+=' L'+xAt(n-1)+','+(H-padB)+' Z';svg.appendChild(mk('path',{d:ap,fill:'rgba(31,78,120,.12)'}));svg.appendChild(mk('path',{d:'M'+pts.map(p=>p[0]+','+p[1]).join(' L'),fill:'none',stroke:'#1F4E78','stroke-width':2}));const step=Math.max(1,Math.ceil(n/8));days.forEach((d,i)=>{const c=mk('circle',{cx:pts[i][0],cy:pts[i][1],r:3,fill:'#1F4E78'});c.appendChild(mk('title',{},d+': '+byDay[d]+' run(s)'));svg.appendChild(c);if(i%step===0||i===n-1){svg.appendChild(mk('text',{x:pts[i][0],y:H-padB+16,'text-anchor':'end','font-size':10,fill:'#555',transform:'rotate(-35 '+pts[i][0]+' '+(H-padB+16)+')'},d));}});}
