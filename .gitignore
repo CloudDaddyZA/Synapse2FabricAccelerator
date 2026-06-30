@@ -15,7 +15,7 @@ config/settings.yaml
 
 # Outputs (generated)
 output/
-powerbi/*.csv
+powerbi/
 
 # Tooling
 .mypy_cache/
