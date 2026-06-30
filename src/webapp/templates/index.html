@@ -20,7 +20,8 @@
       <div class="wsel-actions">
         <button type="button" onclick="wselAll(true)">Select all</button>
         <button type="button" onclick="wselAll(false)">Clear</button>
-        <button type="button" onclick="loadWorkspaces()">↻ Refresh</button>
+        <button type="button" onclick="loadWorkspaces()">↻ Reload</button>
+        <button type="button" onclick="rediscover()">⟳ Re-scan Azure</button>
         <span id="wsel-saved" class="muted"></span>
       </div>
       <div id="wsel-list" class="wsel-list"></div>
@@ -85,7 +86,7 @@ async function loadWorkspaces(){
   const hint = document.getElementById('wsel-hint');
   if(!WS_AVAIL.length){
     list.innerHTML = '';
-    hint.textContent = 'No workspaces discovered yet. Run the “discover” stage, then click ↻ Refresh.';
+    hint.textContent = 'No workspaces discovered yet. Click ⟳ Re-scan Azure to query your subscriptions.';
     updateWselCount();
     return;
   }
@@ -96,6 +97,20 @@ async function loadWorkspaces(){
     return `<label class="wsel-item"><input type="checkbox" value="${safe}" ${checked} onchange="saveWorkspaces()"> ${safe}</label>`;
   }).join('');
   updateWselCount();
+}
+// Re-run the discover stage against Azure, then reload the discovered list.
+async function rediscover(){
+  const r = await fetch('/run/discover', {method:'POST'});
+  if(r.status===409){alert('A job is already running — wait for it to finish, then Re-scan.');return;}
+  const hint = document.getElementById('wsel-hint');
+  hint.textContent = 'Scanning Azure for accessible Synapse workspaces…';
+  poll();
+  const waitDone = async () => {
+    const s = await (await fetch('/status')).json();
+    if(s.status==='running'){ setTimeout(waitDone, 1000); return; }
+    loadWorkspaces();
+  };
+  setTimeout(waitDone, 1200);
 }
 function wselSelected(){
   return Array.from(document.querySelectorAll('#wsel-list input:checked')).map(c => c.value);
