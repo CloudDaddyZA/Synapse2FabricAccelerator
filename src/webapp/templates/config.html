@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h2>Azure sign-in</h2>
+  <p class="muted">Interactive login (Azure CLI) opens a browser. Specify a tenant and/or subscription, or leave blank for default.</p>
+  <div class="field"><label>Tenant ID</label><input type="text" id="tenant" value="{{ settings.tenant_id }}" placeholder="tenant GUID or domain"></div>
+  <div class="field"><label>Subscription (name or ID)</label><input type="text" id="subscription" value="{{ settings.subscriptions[0] if settings.subscriptions else '' }}" placeholder="subscription ID"></div>
+  <button class="primary" onclick="login()">🔑 Interactive login</button>
+  <div id="auth" class="result">Checking sign-in status…</div>
+</section>
+
+<section class="card">
+  <h2>Configuration</h2>
+  <p class="muted">Saved to <code>config/settings.yaml</code>. Credentials live in <code>.env</code> only — never here.</p>
+  <form method="post">
+    {% for key in editable %}
+    <div class="field">
+      <label>{{ key }}</label>
+      {% if key in bool_keys %}
+        <input type="checkbox" name="{{ key }}" {% if settings[key] %}checked{% endif %}>
+      {% elif key in list_keys %}
+        <textarea name="{{ key }}" rows="2" placeholder="one per line">{{ settings[key]|join('\n') }}</textarea>
+      {% else %}
+        <input type="text" name="{{ key }}" value="{{ settings[key] }}">
+      {% endif %}
+    </div>
+    {% endfor %}
+    <button class="primary" type="submit">Save configuration</button>
+  </form>
+</section>
+
+<script>
+async function login(){
+  const fd = new FormData();
+  fd.set('tenant', document.getElementById('tenant').value);
+  fd.set('subscription', document.getElementById('subscription').value);
+  const r = await fetch('/login', {method:'POST', body:fd});
+  if(r.status===409){alert('Login already in progress');return;}
+  acct();
+}
+async function acct(){
+  const a = await (await fetch('/account')).json();
+  const el = document.getElementById('auth');
+  if(a.login && a.login.status==='running'){ el.textContent='Login: '+a.login.message; setTimeout(acct,1500); return; }
+  if(a.signed_in){ el.textContent='Signed in: '+a.user+' · '+a.subscription+' · tenant '+a.tenant_id; }
+  else { el.textContent = a.login && a.login.message ? 'Login: '+a.login.message : 'Not signed in.'; }
+}
+acct();
+</script>
+{% endblock %}

@@ -1,0 +1,78 @@
+table workspaces
+
+	column name
+		dataType: string
+		sourceColumn: name
+
+	column workspace_id
+		dataType: string
+		sourceColumn: workspace_id
+
+	column subscription_id
+		dataType: string
+		sourceColumn: subscription_id
+
+	column resource_group
+		dataType: string
+		sourceColumn: resource_group
+
+	column location
+		dataType: string
+		sourceColumn: location
+
+	column tags
+		dataType: string
+		sourceColumn: tags
+
+	column managed_resource_group
+		dataType: string
+		sourceColumn: managed_resource_group
+
+	column dev_endpoint
+		dataType: string
+		sourceColumn: dev_endpoint
+
+	column sql_endpoint
+		dataType: string
+		sourceColumn: sql_endpoint
+
+	column sql_ondemand_endpoint
+		dataType: string
+		sourceColumn: sql_ondemand_endpoint
+
+	column default_storage_account
+		dataType: string
+		sourceColumn: default_storage_account
+
+	column default_filesystem
+		dataType: string
+		sourceColumn: default_filesystem
+
+	column git_provider
+		dataType: string
+		sourceColumn: git_provider
+
+	column git_repo
+		dataType: string
+		sourceColumn: git_repo
+
+	column managed_vnet
+		dataType: string
+		sourceColumn: managed_vnet
+
+	column public_network_access
+		dataType: string
+		sourceColumn: public_network_access
+
+	measure 'Workspace Count' = COUNTROWS('workspaces')
+
+	measure 'Regions' = DISTINCTCOUNT('workspaces'[location])
+
+	partition workspaces = m
+		mode: import
+		source =
+			let
+			    Source = Csv.Document(File.Contents(DataFolder & "workspaces.csv"),[Delimiter=",",Encoding=65001,QuoteStyle=QuoteStyle.Csv]),
+			    Headers = Table.PromoteHeaders(Source,[PromoteAllScalars=true])
+			in
+			    Headers

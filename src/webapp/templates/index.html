@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="grid">
+  <section class="card">
+    <h2>Run pipeline</h2>
+    <p class="muted">Run the full estate audit, or a single stage. Stages run in order.</p>
+    <button class="primary" onclick="run('run-all')">▶ Run all</button>
+    <div class="agents">
+      {% for a in agents %}
+      <button onclick="run('{{ a }}')">{{ a }}</button>
+      {% endfor %}
+    </div>
+
+    <div class="wsel">
+      <div class="wsel-head">
+        <strong>Workspaces to scan</strong>
+        <span class="muted" id="wsel-count"></span>
+      </div>
+      <p class="muted" id="wsel-hint">Select which discovered workspaces to include in scans.</p>
+      <div class="wsel-actions">
+        <button type="button" onclick="wselAll(true)">Select all</button>
+        <button type="button" onclick="wselAll(false)">Clear</button>
+        <button type="button" onclick="loadWorkspaces()">↻ Refresh</button>
+        <span id="wsel-saved" class="muted"></span>
+      </div>
+      <div id="wsel-list" class="wsel-list"></div>
+    </div>
+
+    <div class="scope">
+      <strong>Scope:</strong>
+      Subscriptions {{ settings.subscriptions|length or 'all' }} ·
+      Workspaces <span id="scope-ws">{{ settings.workspace_names|length or 'all' }}</span> ·
+      Regions {{ settings.regions|length or 'all' }}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Status: <span id="state" class="badge idle">idle</span> <span id="job"></span> <span id="elapsed" class="muted"></span></h2>
+    <div id="steps" class="steps"></div>
+    <pre id="logs" class="logs">No job started yet.</pre>
+    <div id="result" class="result"></div>
+  </section>
+</div>
+
+<script>
+const STEP_ICON = {pending:'○', running:'◐', success:'✓', error:'✕'};
+async function run(target){
+  const r = await fetch('/run/'+target, {method:'POST'});
+  if(r.status===409){alert('A job is already running');return;}
+  poll();
+}
+function renderSteps(steps){
+  const host = document.getElementById('steps');
+  if(!steps || !steps.length){host.innerHTML=''; return;}
+  host.innerHTML = steps.map(s => {
+    const pct = s.status==='success' ? 100 : s.status==='error' ? 100 : s.status==='running' ? 60 : 0;
+    return `<div class="step ${s.status}">
+      <div class="step-head"><span class="step-icon">${STEP_ICON[s.status]||'○'}</span>
+        <span class="step-name">${s.name}</span>
+        <span class="step-time muted">${s.elapsed ? s.elapsed+'s' : ''}</span></div>
+      <div class="bar"><span style="width:${pct}%"></span></div>
+    </div>`;
+  }).join('');
+}
+async function poll(){
+  const s = await (await fetch('/status')).json();
+  document.getElementById('state').textContent = s.status;
+  document.getElementById('state').className = 'badge ' + s.status;
+  document.getElementById('job').textContent = s.name !== 'none' ? '('+s.name+')' : '';
+  document.getElementById('elapsed').textContent = s.elapsed ? s.elapsed+'s' : '';
+  renderSteps(s.steps);
+  document.getElementById('logs').textContent = (s.logs||[]).join('\n') || '...';
+  document.getElementById('result').textContent = s.error ? s.error : (s.result ? JSON.stringify(s.result) : '');
+  if(s.status==='running') setTimeout(poll, 1000);
+}
+poll();
+
+let WS_AVAIL = [];
+async function loadWorkspaces(){
+  const d = await (await fetch('/workspaces')).json();
+  WS_AVAIL = d.available || [];
+  const sel = new Set(d.selected || []);
+  const all = sel.size === 0;  // empty saved selection means "scan all"
+  const list = document.getElementById('wsel-list');
+  const hint = document.getElementById('wsel-hint');
+  if(!WS_AVAIL.length){
+    list.innerHTML = '';
+    hint.textContent = 'No workspaces discovered yet. Run the “discover” stage, then click ↻ Refresh.';
+    updateWselCount();
+    return;
+  }
+  hint.textContent = 'Select which discovered workspaces to include in scans. Leave all checked to scan everything.';
+  list.innerHTML = WS_AVAIL.map(w => {
+    const checked = (all || sel.has(w)) ? 'checked' : '';
+    const safe = w.replace(/"/g, '&quot;');
+    return `<label class="wsel-item"><input type="checkbox" value="${safe}" ${checked} onchange="saveWorkspaces()"> ${safe}</label>`;
+  }).join('');
+  updateWselCount();
+}
+function wselSelected(){
+  return Array.from(document.querySelectorAll('#wsel-list input:checked')).map(c => c.value);
+}
+function updateWselCount(){
+  const n = wselSelected().length, t = WS_AVAIL.length;
+  document.getElementById('wsel-count').textContent = t ? `(${n}/${t} selected)` : '';
+  document.getElementById('scope-ws').textContent = (!t || n === t) ? 'all' : n;
+}
+function wselAll(on){
+  document.querySelectorAll('#wsel-list input').forEach(c => c.checked = on);
+  saveWorkspaces();
+}
+let _wsTimer;
+function saveWorkspaces(){
+  updateWselCount();
+  clearTimeout(_wsTimer);
+  _wsTimer = setTimeout(async () => {
+    const sel = wselSelected();
+    // All selected => save empty list (= scan all, future workspaces included).
+    const payload = (sel.length === WS_AVAIL.length) ? [] : sel;
+    const el = document.getElementById('wsel-saved');
+    const r = await fetch('/workspaces', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({workspaces: payload}),
+    });
+    if(r.ok){ el.textContent = 'Saved ✓'; setTimeout(() => el.textContent = '', 1500); }
+    else { el.textContent = 'Save failed'; }
+  }, 400);
+}
+loadWorkspaces();
+</script>
+{% endblock %}

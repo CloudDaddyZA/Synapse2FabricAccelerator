@@ -1,0 +1,20 @@
+table migration_complexity
+
+	column artifact
+		dataType: string
+		sourceColumn: artifact
+
+	column score
+		dataType: int64
+		sourceColumn: score
+
+	measure 'Avg Complexity' = AVERAGE('migration_complexity'[score])
+
+	partition migration_complexity = m
+		mode: import
+		source =
+			let
+			    Source = Csv.Document(File.Contents(DataFolder & "migration_complexity.csv"),[Delimiter=",",Encoding=65001,QuoteStyle=QuoteStyle.Csv]),
+			    Headers = Table.PromoteHeaders(Source,[PromoteAllScalars=true])
+			in
+			    Headers

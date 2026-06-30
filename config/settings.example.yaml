@@ -1,0 +1,31 @@
+# Synapse to Fabric Migration Accelerator — configuration
+# Copy to settings.yaml and adjust. settings.yaml is gitignored.
+
+# Azure tenant. Leave empty to use the default from credentials.
+tenant_id: ""
+
+# Scope filters. Empty lists mean "discover all accessible".
+subscriptions: []        # e.g. ["00000000-0000-0000-0000-000000000000"]
+resource_groups: []      # e.g. ["rg-analytics-prod"]
+workspace_names: []      # e.g. ["synw-prod-eastus"]
+regions: []              # e.g. ["eastus", "westeurope"]
+
+# Output root (relative to repo root or absolute).
+output_path: "output"
+
+# Feature toggles
+include_security_scan: true
+include_usage_analysis: true
+include_powerbi_outputs: true
+include_html_dashboard: true
+include_copilot_optimization_pack: true
+
+# Logging
+log_level: "INFO"
+
+# Resilience
+retry_max_attempts: 5
+retry_backoff_seconds: 2
+
+# Synapse data-plane API version
+synapse_api_version: "2020-12-01"

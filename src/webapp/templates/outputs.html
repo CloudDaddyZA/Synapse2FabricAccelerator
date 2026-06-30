@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h2>Generated outputs</h2>
+  {% if not files %}
+    <p class="muted">No outputs yet. Run the pipeline first.</p>
+  {% else %}
+  <table>
+    <thead><tr><th>File</th><th></th></tr></thead>
+    <tbody>
+      {% for f in files %}
+      <tr>
+        <td>{{ f }}</td>
+        <td><a href="{{ url_for('file', rel=f) }}" target="_blank">{{ 'view' if f.endswith('.html') else 'download' }}</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+{% endblock %}

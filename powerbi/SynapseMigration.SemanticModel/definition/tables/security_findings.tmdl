@@ -1,0 +1,24 @@
+table security_findings
+
+	column artifact
+		dataType: string
+		sourceColumn: artifact
+
+	column severity
+		dataType: string
+		sourceColumn: severity
+
+	column message
+		dataType: string
+		sourceColumn: message
+
+	measure 'Open Findings' = COUNTROWS('security_findings')
+
+	partition security_findings = m
+		mode: import
+		source =
+			let
+			    Source = Csv.Document(File.Contents(DataFolder & "security_findings.csv"),[Delimiter=",",Encoding=65001,QuoteStyle=QuoteStyle.Csv]),
+			    Headers = Table.PromoteHeaders(Source,[PromoteAllScalars=true])
+			in
+			    Headers
