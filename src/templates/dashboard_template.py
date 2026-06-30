@@ -291,26 +291,48 @@ function spider(){const svg=document.getElementById('spiderSvg');if(!svg)return;
   groups.forEach((g,gi)=>{const items=(D[g[0]]||[]).filter(r=>r.workspace===ws);if(!items.length)return;const ga=wa+(gi-3.5)*0.18;const gx=wx+Math.cos(ga)*90,gy=wy+Math.sin(ga)*90;edge(svg,wx,wy,gx,gy);node(svg,gx,gy,7+Math.min(items.length,12),g[1],g[0].replace(/_/g,' ')+' ('+items.length+')',()=>drillGroup(ws,g[0]));});
   node(svg,wx,wy,14,'#16385a',ws,()=>detail(JSON.stringify({name:ws,assessment_status:''}),ws));});
  node(svg,cx,cy,18,'#1F4E78','Estate',null);}
-function trigSpider(){const svg=document.getElementById('trigSvg');if(!svg)return;const a=active();
- const actIndex={};(D.pipeline_activities||[]).forEach(x=>{(actIndex[x.workspace+'|'+x.pipeline]=actIndex[x.workspace+'|'+x.pipeline]||[]).push(x);});
- function gatherLeaves(ws,pipe,seen,depth){if(depth>4||seen.has(pipe))return [];seen.add(pipe);let out=[];(actIndex[ws+'|'+pipe]||[]).forEach(x=>{const t=x.activity_type;if(t==='SynapseNotebook')out.push({type:'nb',name:x.target||x.name});else if(t==='ExecuteDataFlow')out.push({type:'df',name:x.target||x.name});else if(t==='ExecutePipeline'&&x.target)out=out.concat(gatherLeaves(ws,x.target,seen,depth+1));});return out;}
+let _trigActIdx=null,_trigNodes=[];
+function trigActIndex(){if(!_trigActIdx){const m={};(D.pipeline_activities||[]).forEach(x=>{(m[x.workspace+'|'+x.pipeline]=m[x.workspace+'|'+x.pipeline]||[]).push(x);});_trigActIdx=m;}return _trigActIdx;}
+function trigLeaves(ws,pipe,seen,depth){const idx=trigActIndex();if(depth>4||seen.has(pipe))return [];seen.add(pipe);let out=[];(idx[ws+'|'+pipe]||[]).forEach(x=>{const t=x.activity_type;if(t==='SynapseNotebook')out.push({type:'nb',name:x.target||x.name});else if(t==='ExecuteDataFlow')out.push({type:'df',name:x.target||x.name});else if(t==='ExecutePipeline'&&x.target)out=out.concat(trigLeaves(ws,x.target,seen,depth+1));});return out;}
+function trigSpider(){const svg=document.getElementById('trigSvg');if(!svg)return;const a=active();_trigActIdx=null;
+ const pipeByKey={};(D.pipelines||[]).forEach(p=>{pipeByKey[p.workspace+'|'+p.name]=p;});
+ const nbByKey={};(D.notebooks||[]).forEach(nn=>{nbByKey[nn.workspace+'|'+nn.name]=nn;});
+ const dfByKey={};(D.dataflows||[]).forEach(d=>{dfByKey[d.workspace+'|'+d.name]=d;});
  const trigs=(D.triggers||[]).filter(t=>a.includes(t.workspace)&&(t.pipelines||[]).length);
  const COL={trig:'#a05a2c',pipe:'#c47f00',nb:'#107c10',df:'#5b8a3a'};const W=1120,boxW=250,boxH=24;
- if(!trigs.length){svg.setAttribute('viewBox','0 0 '+W+' 90');svg.setAttribute('height',90);svg.innerHTML='<text x="20" y="48" font-size="13" fill="#888">No triggers reference pipelines for the selected workspaces. Triggers fire pipelines that run notebooks and data flows \u2014 adjust the workspace filter or run inventory with access to populate this view.</text>';return;}
+ if(!trigs.length){svg.setAttribute('viewBox','0 0 '+W+' 90');svg.setAttribute('height',90);svg.innerHTML='<text x="20" y="48" font-size="13" fill="#888">No triggers reference pipelines for the selected workspaces. Triggers fire pipelines that run notebooks and data flows \u2014 adjust the workspace filter or run inventory with access to populate this view.</text>';_trigNodes=[];return;}
  const nodes=[],edges=[];const rowH=32,padT=46,colT=40,colP=435,colL=820;let slot=0;
  trigs.forEach(t=>{const pipeIdxs=[];
-  (t.pipelines||[]).forEach(pn=>{let leaves=gatherLeaves(t.workspace,pn,new Set(),0);
+  (t.pipelines||[]).forEach(pn=>{let leaves=trigLeaves(t.workspace,pn,new Set(),0);
    const seen={};leaves=leaves.filter(l=>{const k=l.type+'|'+l.name;if(seen[k])return false;seen[k]=1;return true;});
-   const leafIdx=[];leaves.forEach(l=>{const y=padT+slot*rowH;slot++;leafIdx.push(nodes.length);nodes.push({x:colL,y,label:l.name,type:l.type});});
+   const leafIdx=[];leaves.forEach(l=>{const y=padT+slot*rowH;slot++;leafIdx.push(nodes.length);const data=(l.type==='nb'?nbByKey:dfByKey)[t.workspace+'|'+l.name]||null;nodes.push({x:colL,y,label:l.name,type:l.type,ws:t.workspace,data});});
    let py;if(leafIdx.length){py=leafIdx.reduce((s,i)=>s+nodes[i].y,0)/leafIdx.length;}else{py=padT+slot*rowH;slot++;}
-   const pIdx=nodes.length;nodes.push({x:colP,y:py,label:pn,type:'pipe'});pipeIdxs.push(pIdx);leafIdx.forEach(i=>edges.push([pIdx,i]));});
+   const pIdx=nodes.length;nodes.push({x:colP,y:py,label:pn,type:'pipe',ws:t.workspace,data:pipeByKey[t.workspace+'|'+pn]||{name:pn,workspace:t.workspace}});pipeIdxs.push(pIdx);leafIdx.forEach(i=>edges.push([pIdx,i]));});
   let ty;if(pipeIdxs.length){ty=pipeIdxs.reduce((s,i)=>s+nodes[i].y,0)/pipeIdxs.length;}else{ty=padT+slot*rowH;slot++;}
-  const tIdx=nodes.length;nodes.push({x:colT,y:ty,label:t.name,type:'trig',sub:t.init_method||t.trigger_type});pipeIdxs.forEach(i=>edges.push([tIdx,i]));});
+  const tIdx=nodes.length;nodes.push({x:colT,y:ty,label:t.name,type:'trig',sub:t.init_method||t.trigger_type,ws:t.workspace,data:t});pipeIdxs.forEach(i=>edges.push([tIdx,i]));});
  const H=Math.max(120,padT+slot*rowH+12);
  let e='';edges.forEach(p=>{const P=nodes[p[0]],C=nodes[p[1]];const x1=P.x+boxW,y1=P.y+boxH/2,x2=C.x,y2=C.y+boxH/2,mx=(x1+x2)/2;e+='<path d="M'+x1+' '+y1+' C'+mx+' '+y1+' '+mx+' '+y2+' '+x2+' '+y2+'" fill="none" stroke="#c3cdda" stroke-width="1.3"/>';});
- let n='';nodes.forEach(nd=>{const c=COL[nd.type];const sub=nd.sub?'<text x="'+(nd.x+9)+'" y="'+(nd.y+boxH-5)+'" font-size="8.5" fill="#fce4d2">'+esc(trim(nd.sub,32))+'</text>':'';const tY=nd.sub?(nd.y+11):(nd.y+boxH/2+3.5);n+='<g><title>'+esc(nd.label)+'</title><rect x="'+nd.x+'" y="'+nd.y+'" width="'+boxW+'" height="'+boxH+'" rx="5" fill="'+c+'" stroke="#fff" stroke-width="1"/><text x="'+(nd.x+9)+'" y="'+tY+'" font-size="10.5" fill="#fff" font-weight="bold">'+esc(trim(nd.label,33))+'</text>'+sub+'</g>';});
+ let n='';nodes.forEach((nd,i)=>{const c=COL[nd.type];const sub=nd.sub?'<text x="'+(nd.x+9)+'" y="'+(nd.y+boxH-5)+'" font-size="8.5" fill="#fce4d2" style="pointer-events:none">'+esc(trim(nd.sub,32))+'</text>':'';const tY=nd.sub?(nd.y+11):(nd.y+boxH/2+3.5);n+='<g data-ni="'+i+'" style="cursor:pointer"><title>'+esc(nd.label)+' \u2014 click for details</title><rect x="'+nd.x+'" y="'+nd.y+'" width="'+boxW+'" height="'+boxH+'" rx="5" fill="'+c+'" stroke="#fff" stroke-width="1"/><text x="'+(nd.x+9)+'" y="'+tY+'" font-size="10.5" fill="#fff" font-weight="bold" style="pointer-events:none">'+esc(trim(nd.label,33))+'</text>'+sub+'</g>';});
  const heads='<text x="'+colT+'" y="24" font-size="12" font-weight="bold" fill="#a05a2c">Triggers</text><text x="'+colP+'" y="24" font-size="12" font-weight="bold" fill="#c47f00">Pipelines</text><text x="'+colL+'" y="24" font-size="12" font-weight="bold" fill="#107c10">Notebooks / Data flows</text>';
- svg.setAttribute('viewBox','0 0 '+W+' '+H);svg.setAttribute('height',H);svg.innerHTML=heads+e+n;}
+ svg.setAttribute('viewBox','0 0 '+W+' '+H);svg.setAttribute('height',H);svg.innerHTML=heads+e+n;_trigNodes=nodes;
+ svg.querySelectorAll('[data-ni]').forEach(g=>g.onclick=()=>trigDetail(_trigNodes[+g.getAttribute('data-ni')]));}
+function trigDetail(nd){if(!nd)return;const open=h=>{document.getElementById('dc').innerHTML=h;document.getElementById('drawer').classList.add('open');document.getElementById('ov').classList.add('open');};
+ if(nd.type==='trig'){const t=nd.data;let h='<h2>'+esc(t.name)+'</h2><p class="muted">Trigger \u2014 fires the pipelines below on its schedule/event. Re-create as a Fabric schedule or Data Activator reflex.</p>';
+  const fields=['workspace','trigger_type','init_method','runtime_state','recurrence','frequency','interval','start_time','end_time','time_zone','event_scope','pipeline_count'];
+  h+='<table>'+fields.filter(k=>t[k]!==undefined&&t[k]!==''&&t[k]!==0).map(k=>'<tr><th>'+esc(k)+'</th><td>'+esc(t[k])+'</td></tr>').join('')+'</table>';
+  const pipes=t.pipelines||[];h+='<h3>Fires '+pipes.length+' pipeline(s)</h3>';
+  pipes.forEach(pn=>{let leaves=trigLeaves(t.workspace,pn,new Set(),0);const u={};leaves=leaves.filter(l=>{const k=l.type+'|'+l.name;if(u[k])return false;u[k]=1;return true;});
+   const nb=leaves.filter(l=>l.type==='nb'),df=leaves.filter(l=>l.type==='df');
+   h+='<h4>'+esc(pn)+'</h4>';
+   if(nb.length)h+='<p><b>Notebooks ('+nb.length+'):</b> '+nb.map(l=>esc(l.name)).join(', ')+'</p>';
+   if(df.length)h+='<p><b>Data flows ('+df.length+'):</b> '+df.map(l=>esc(l.name)).join(', ')+'</p>';
+   if(!nb.length&&!df.length)h+='<p class="muted">No notebook/data-flow steps captured (Copy-only pipeline, or re-run inventory to resolve ExecutePipeline chains and nested steps).</p>';});
+  open(h);return;}
+ if(nd.data&&(('activity_count' in nd.data)||('cell_count' in nd.data)||('transformation_count' in nd.data))){detail(JSON.stringify(nd.data),nd.ws);return;}
+ let h='<h2>'+esc(nd.label)+'</h2>';
+ if(nd.type==='nb'||nd.type==='df')h+='<p class="muted">'+(nd.type==='nb'?'Notebook':'Data flow')+' step invoked by a pipeline activity in <b>'+esc(nd.ws)+'</b>. The matching artifact was not found in the current inventory \u2014 the label shown is the activity name. Re-run inventory with read access to capture its full detail.</p>';
+ else h+='<p class="muted">Pipeline <b>'+esc(nd.label)+'</b> in '+esc(nd.ws)+' \u2014 no detailed activity record captured. Re-run inventory to populate its activity flow.</p>';
+ open(h);}
 function drillGroup(ws,k){const items=(D[k]||[]).filter(r=>r.workspace===ws);let h='<h2>'+esc(ws)+' — '+k.replace(/_/g,' ')+'</h2><table>';if(items.length){const cols=Object.keys(items[0]).slice(0,4);h+='<tr>'+cols.map(c=>'<th>'+esc(c)+'</th>').join('')+'</tr>';items.slice(0,80).forEach(it=>h+='<tr>'+cols.map(c=>'<td>'+esc(it[c])+'</td>').join('')+'</tr>');}h+='</table>';document.getElementById('dc').innerHTML=h;document.getElementById('drawer').classList.add('open');document.getElementById('ov').classList.add('open');}
 function att(v){return esc(v).replace(/"/g,'&quot;');}
 function trim(s,n){s=''+(s==null?'':s);return s.length>n?s.slice(0,n-1)+'\u2026':s;}
