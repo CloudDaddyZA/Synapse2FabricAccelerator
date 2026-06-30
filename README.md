@@ -60,35 +60,33 @@ It runs read-only against your Synapse environment, produces consultant-ready de
 
 ## Screenshots
 
-> Images live in [`docs/screenshots/`](docs/screenshots/). Drop the PNGs there using the file names below to render this gallery.
-
 ### Fabric Readiness — delivery-team & timeline planner
 
-![Fabric Readiness view with the delivery-team & timeline planner, GitHub Copilot productivity selector, and migration-complexity bands](docs/screenshots/fabric-readiness.png)
+![Fabric Readiness view with the delivery-team & timeline planner, GitHub Copilot productivity selector, and migration-complexity bands](images/fabric%20readiness.png)
 
 Enter head-counts per role and pick a **GitHub Copilot** productivity tier to convert the total person-day rebuild effort into an estimated calendar duration. Clicking a complexity band re-scopes the KPI cards, effort, optimizations, planner, and tables to that band.
 
 ### Overview
 
-![Overview with KPI cards, a resource-summary chart, and batch vs. real-time run split](docs/screenshots/overview.png)
+![Overview with KPI cards, a resource-summary chart, and batch vs. real-time run split](images/overview.png)
 
 ### Pipeline Ops
 
-![Pipeline Ops with run KPIs, status breakdown, batch vs. real-time, and a runs-by-day line chart](docs/screenshots/pipeline-ops.png)
+![Pipeline Ops with run KPIs, status breakdown, batch vs. real-time, and a runs-by-day line chart](images/pipeline%20ops.png)
 
 ### Role-aligned views
 
 | Admin | Data Engineering | Data Warehousing | Data Integration |
 |---|---|---|---|
-| ![Admin view](docs/screenshots/admin.png) | ![Data Engineering view](docs/screenshots/data-engineering.png) | ![Data Warehousing view](docs/screenshots/data-warehousing.png) | ![Data Integration view](docs/screenshots/data-integration.png) |
+| ![Admin view](images/admin.png) | ![Data Engineering view](images/data%20engineering.png) | ![Data Warehousing view](images/data%20warehousing.png) | ![Data Integration view](images/data%20integration.png) |
 
 ### Web UI
 
 | Run pipeline | Generated outputs |
 |---|---|
-| ![Web UI run pipeline page with per-stage progress, workspace selection, and live logs](docs/screenshots/webapp-run.png) | ![Web UI generated-outputs browser](docs/screenshots/webapp-outputs.png) |
+| ![Web UI run pipeline page with per-stage progress, workspace selection, and live logs](images/main.png) | ![Web UI generated-outputs browser](images/outputs.png) |
 
-![Web UI Azure sign-in and configuration page — interactive login plus settings saved to config/settings.yaml (credentials stay in .env)](docs/screenshots/webapp-config.png)
+![Web UI Azure sign-in and configuration page — interactive login plus settings saved to config/settings.yaml (credentials stay in .env)](images/configuration.png)
 
 ---
 
