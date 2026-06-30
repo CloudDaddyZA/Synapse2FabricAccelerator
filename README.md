@@ -191,6 +191,7 @@ The inventory and assessment cover:
 - **Pipeline Ops** — pipeline run analytics with a runs-by-day line chart, status breakdown, and click-to-filter per-pipeline statistics.
 - **Fabric Readiness** — migration-complexity bands, per-type complexity tables (pipelines, notebooks, **data flows**), and Fabric optimization opportunities. Includes a **delivery-team & timeline planner**: enter head-counts per role (architects, data engineers, data-integration engineers, infra engineers, QA) and pick a **GitHub Copilot** productivity tier to convert the total person-day rebuild effort into an estimated calendar duration. Clicking a complexity band filters the KPI cards, effort, optimizations, planner, and tables to that band; click again to clear.
 - **Spider** — per-workspace artifact distribution (incl. data flows).
+- **Trigger Spider** — follows each trigger to the pipelines it fires, then on to the notebooks and data flows those pipelines run (tracing `ExecutePipeline` chains and nested container activities), exposing the schedule/event-driven dependency chains you must re-wire in Fabric.
 - **Drill-down drawer** — click any row for details: pipeline activity-flow diagrams, notebook code, complexity drivers + optimizations, and data-flow source/sink/transformation breakdowns.
 
 A shared workspace filter applies across every view.

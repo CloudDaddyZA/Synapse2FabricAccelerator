@@ -33,7 +33,7 @@ The accelerator is a small, modular Python package. Each subpackage has a single
 
 ## `templates/`
 
-- `dashboard_template.py` — renders `output/dashboard/index.html`. All charts are inline SVG (no CDN). Views: Overview, Admin, Data Engineering, Data Warehousing, Data Integration, Pipeline Ops, Fabric Readiness, and Spider, plus a shared workspace filter and a drill-down drawer. The Fabric Readiness view adds a client-side **delivery-team & timeline planner** (`recalcTeam()`): role head-count inputs (`.teamc`, each carrying a `data-alloc` allocation factor) and a **GitHub Copilot** productivity selector combine to turn the band-aware rebuild effort (`mcEffort`) into an effective-FTE-based calendar duration. Selecting a complexity band re-scopes the KPI cards, effort, optimizations, and planner — not just the tables.
+- `dashboard_template.py` — renders `output/dashboard/index.html`. All charts are inline SVG (no CDN). Views: Overview, Admin, Data Engineering, Data Warehousing, Data Integration, Pipeline Ops, Fabric Readiness, Spider, and Trigger Spider, plus a shared workspace filter and a drill-down drawer. The Fabric Readiness view adds a client-side **delivery-team & timeline planner** (`recalcTeam()`): role head-count inputs (`.teamc`, each carrying a `data-alloc` allocation factor) and a **GitHub Copilot** productivity selector combine to turn the band-aware rebuild effort (`mcEffort`) into an effective-FTE-based calendar duration. Selecting a complexity band re-scopes the KPI cards, effort, optimizations, and planner — not just the tables.
 
 ## `webapp/`
 

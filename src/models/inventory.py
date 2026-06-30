@@ -75,6 +75,8 @@ class PipelineActivity(BaseModel):
     has_retry: bool = False
     depends_on_count: int = 0
     depends_on: list[str] = Field(default_factory=list)
+    target: str = ""  # referenced notebook / dataflow / child-pipeline name (when applicable)
+    nested: bool = False  # captured from inside a container activity (ForEach/If/Until/Switch)
 
 
 class Pipeline(BaseModel):

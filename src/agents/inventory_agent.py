@@ -191,6 +191,10 @@ class InventoryAgent(BaseAgent):
             for a in activities:
                 for ls in re.findall(r'"referenceName"\s*:\s*"([^"]+)"', str(a)):
                     ls_refs.append(ls)
+            # Flatten container activities (ForEach/If/Until/Switch) so notebook and
+            # data-flow steps nested inside them are captured, and record what each
+            # activity invokes (notebook / data flow / child pipeline) as its target.
+            for a, nested in self._iter_activities(activities):
                 deps = [d.get("activity", "") for d in a.get("dependsOn", []) if d.get("activity")]
                 acts.append(PipelineActivity(
                     pipeline=raw.get("name", ""), workspace=ws.name,
@@ -198,6 +202,8 @@ class InventoryAgent(BaseAgent):
                     has_retry=bool(a.get("policy", {}).get("retry")),
                     depends_on_count=len(a.get("dependsOn", [])),
                     depends_on=deps,
+                    target=self._activity_target(a),
+                    nested=nested,
                 ))
             pls.append(Pipeline(
                 name=raw.get("name", ""), workspace=ws.name,
@@ -207,6 +213,38 @@ class InventoryAgent(BaseAgent):
                 linked_service_refs=sorted(set(ls_refs)), dataset_refs=sorted(set(ds_refs)),
             ))
         return pls, acts
+
+    # Container activities whose child lists must be walked to reach nested steps.
+    _ACTIVITY_CONTAINERS = ("activities", "ifTrueActivities", "ifFalseActivities", "defaultActivities")
+
+    def _iter_activities(self, activities, nested: bool = False):
+        """Yield (activity, is_nested) flattening container activities recursively."""
+        for a in activities or []:
+            yield a, nested
+            tp = a.get("typeProperties", {}) or {}
+            for key in self._ACTIVITY_CONTAINERS:
+                sub = tp.get(key)
+                if isinstance(sub, list):
+                    yield from self._iter_activities(sub, True)
+            for case in tp.get("cases") or []:
+                if isinstance(case, dict) and isinstance(case.get("activities"), list):
+                    yield from self._iter_activities(case["activities"], True)
+
+    @staticmethod
+    def _activity_target(a: dict) -> str:
+        """Name of the notebook / data flow / child pipeline an activity invokes."""
+        t = a.get("type", "")
+        tp = a.get("typeProperties", {}) or {}
+        if t == "ExecuteDataFlow":
+            ref = tp.get("dataflow") or tp.get("dataFlow")
+        elif t == "SynapseNotebook":
+            ref = tp.get("notebook")
+        elif t == "ExecutePipeline":
+            ref = tp.get("pipeline")
+        else:
+            ref = None
+        return ref.get("referenceName", "") if isinstance(ref, dict) else ""
+
 
     # Batch trigger types map to scheduled/window workloads; rest treated as real-time/event.
     _BATCH_TRIGGERS = {"ScheduleTrigger", "TumblingWindowTrigger"}
