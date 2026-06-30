@@ -10,7 +10,6 @@ It runs read-only against your Synapse environment, produces consultant-ready de
 
 - [What it produces](#what-it-produces)
 - [Features](#features)
-- [Screenshots](#screenshots)
 - [Requirements](#requirements)
 - [Quick start](#quick-start)
 - [CLI reference](#cli-reference)
@@ -55,38 +54,6 @@ It runs read-only against your Synapse environment, produces consultant-ready de
 - **Copilot optimization pack** — review prompts for VS Code (no Copilot API calls are made by this tool).
 - **Web UI** — configure connection, pick workspaces to scan, run any stage or the full pipeline with live logs, and browse/download every output.
 - **Resilient by design** — retry with backoff, graceful partial failure, per-artifact error capture, and access-status tracking per workspace.
-
----
-
-## Screenshots
-
-### Fabric Readiness — delivery-team & timeline planner
-
-![Fabric Readiness view with the delivery-team & timeline planner, GitHub Copilot productivity selector, and migration-complexity bands](images/fabric%20readiness.png)
-
-Enter head-counts per role and pick a **GitHub Copilot** productivity tier to convert the total person-day rebuild effort into an estimated calendar duration. Clicking a complexity band re-scopes the KPI cards, effort, optimizations, planner, and tables to that band.
-
-### Overview
-
-![Overview with KPI cards, a resource-summary chart, and batch vs. real-time run split](images/overview.png)
-
-### Pipeline Ops
-
-![Pipeline Ops with run KPIs, status breakdown, batch vs. real-time, and a runs-by-day line chart](images/pipeline%20ops.png)
-
-### Role-aligned views
-
-| Admin | Data Engineering | Data Warehousing | Data Integration |
-|---|---|---|---|
-| ![Admin view](images/admin.png) | ![Data Engineering view](images/data%20engineering.png) | ![Data Warehousing view](images/data%20warehousing.png) | ![Data Integration view](images/data%20integration.png) |
-
-### Web UI
-
-| Run pipeline | Generated outputs |
-|---|---|
-| ![Web UI run pipeline page with per-stage progress, workspace selection, and live logs](images/main.png) | ![Web UI generated-outputs browser](images/outputs.png) |
-
-![Web UI Azure sign-in and configuration page — interactive login plus settings saved to config/settings.yaml (credentials stay in .env)](images/configuration.png)
 
 ---
 
@@ -227,6 +194,34 @@ The inventory and assessment cover:
 - **Drill-down drawer** — click any row for details: pipeline activity-flow diagrams, notebook code, complexity drivers + optimizations, and data-flow source/sink/transformation breakdowns.
 
 A shared workspace filter applies across every view.
+
+### Fabric Readiness — delivery-team & timeline planner
+
+![Fabric Readiness view with the delivery-team & timeline planner, GitHub Copilot productivity selector, and migration-complexity bands](images/fabric%20readiness.png)
+
+Enter head-counts per role and pick a **GitHub Copilot** productivity tier to convert the total person-day rebuild effort into an estimated calendar duration. Clicking a complexity band re-scopes the KPI cards, effort, optimizations, planner, and tables to that band.
+
+### Overview
+
+![Overview with KPI cards, a resource-summary chart, and batch vs. real-time run split](images/overview.png)
+
+### Pipeline Ops
+
+![Pipeline Ops with run KPIs, status breakdown, batch vs. real-time, and a runs-by-day line chart](images/pipeline%20ops.png)
+
+### Role-aligned views
+
+| Admin | Data Engineering | Data Warehousing | Data Integration |
+|---|---|---|---|
+| ![Admin view](images/admin.png) | ![Data Engineering view](images/data%20engineering.png) | ![Data Warehousing view](images/data%20warehousing.png) | ![Data Integration view](images/data%20integration.png) |
+
+### Web UI
+
+| Run pipeline | Generated outputs |
+|---|---|
+| ![Web UI run pipeline page with per-stage progress, workspace selection, and live logs](images/main.png) | ![Web UI generated-outputs browser](images/outputs.png) |
+
+![Web UI Azure sign-in and configuration page — interactive login plus settings saved to config/settings.yaml (credentials stay in .env)](images/configuration.png)
 
 ---
 
