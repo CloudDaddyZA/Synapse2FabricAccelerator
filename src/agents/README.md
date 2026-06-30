@@ -47,7 +47,7 @@ Generates 13 Markdown + HTML reports from saved JSON:
 - **Role-aligned**: Admin, Data Engineering (incl. data flows), Data Warehousing, Data Integration (incl. data flows), plus risk register, dependency, and Fabric recommendations.
 
 ## 6. Dashboard — `dashboard_agent.py`
-Assembles a single data dict from inventory/assessment/migration and renders the self-contained HTML dashboard via `templates/dashboard_template.py`. Also writes the Power BI CSV datasets (incl. `dataflows.csv`) and refreshes the model guide.
+Assembles a single data dict from inventory/assessment/migration and renders the self-contained HTML dashboard via `templates/dashboard_template.py`. Also writes the Power BI CSV datasets (incl. `dataflows.csv`) and refreshes the model guide. The Fabric Readiness view embeds a delivery-team & timeline planner that converts per-artifact effort estimates into a calendar duration based on team head-counts and a GitHub Copilot productivity tier, and re-scopes its KPIs when a complexity band is selected.
 
 ## 7. Optimization — `optimization_agent.py`
 Produces the **Copilot optimization pack**: per-artifact review prompts (pipeline / notebook / spark / SQL) plus source artifacts and an index `README.md`. No Copilot API calls are made — these are prompts for engineers to run in VS Code.

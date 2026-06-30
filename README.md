@@ -49,7 +49,7 @@ It runs read-only against your Synapse environment, produces consultant-ready de
 - **Assessment** with risk/complexity scoring (Low/Medium/High/Critical), per-artifact migration effort estimates, and Fabric readiness analysis.
 - **Migration** mapping to Fabric targets, a phased wave plan, and cutover / validation / decommission checklists.
 - **Reports** — executive, technical, and role-aligned (admin, data engineering, data warehousing, data integration) in Markdown and HTML.
-- **Offline HTML dashboard** — fully self-contained (inline SVG charts, no CDN), with workspace filtering, drill-down drawers, pipeline-flow diagrams, pipeline run analytics, and a Fabric Readiness view.
+- **Offline HTML dashboard** — fully self-contained (inline SVG charts, no CDN), with workspace filtering, drill-down drawers, pipeline-flow diagrams, pipeline run analytics, and a Fabric Readiness view with a **delivery-team & timeline planner** (role head-counts + GitHub Copilot productivity uplift drive an estimated calendar duration).
 - **Power BI** — a ready-to-open `.pbip` project plus CSV datasets and a model guide.
 - **Copilot optimization pack** — review prompts for VS Code (no Copilot API calls are made by this tool).
 - **Web UI** — configure connection, pick workspaces to scan, run any stage or the full pipeline with live logs, and browse/download every output.
@@ -189,7 +189,7 @@ The inventory and assessment cover:
 - **Overview** — KPI cards and a resource-summary chart (incl. data flows), plus batch vs. real-time split.
 - **Admin / Data Engineering / Data Warehousing / Data Integration** — role-aligned tables (data flows appear under Integration and Data Engineering).
 - **Pipeline Ops** — pipeline run analytics with a runs-by-day line chart, status breakdown, and click-to-filter per-pipeline statistics.
-- **Fabric Readiness** — migration-complexity bands, per-type complexity tables (pipelines, notebooks, **data flows**), and Fabric optimization opportunities.
+- **Fabric Readiness** — migration-complexity bands, per-type complexity tables (pipelines, notebooks, **data flows**), and Fabric optimization opportunities. Includes a **delivery-team & timeline planner**: enter head-counts per role (architects, data engineers, data-integration engineers, infra engineers, QA) and pick a **GitHub Copilot** productivity tier to convert the total person-day rebuild effort into an estimated calendar duration. Clicking a complexity band filters the KPI cards, effort, optimizations, planner, and tables to that band; click again to clear.
 - **Spider** — per-workspace artifact distribution (incl. data flows).
 - **Drill-down drawer** — click any row for details: pipeline activity-flow diagrams, notebook code, complexity drivers + optimizations, and data-flow source/sink/transformation breakdowns.
 
