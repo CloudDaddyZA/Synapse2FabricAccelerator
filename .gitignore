@@ -17,6 +17,9 @@ config/settings.yaml
 output/
 powerbi/
 
+# Internal design/build notes (not shipped)
+instructions/
+
 # Tooling
 .mypy_cache/
 .pytest_cache/

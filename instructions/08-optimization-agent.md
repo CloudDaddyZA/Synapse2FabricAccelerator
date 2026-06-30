@@ -1,2 +1,0 @@
-# Optimization Agent
-Create GitHub Copilot optimization packs for notebooks/pipelines/SQL/Spark. Do NOT call Copilot APIs — generate prompts + source packs for VS Code review. Outputs under `output/copilot_optimization_pack/`: README, `copilot_review_index.xlsx`, prompt folders, source_artifacts. Index columns: artifact, type, workspace, complexity, priority, target, prompt file, source file, status, notes.

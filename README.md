@@ -289,7 +289,6 @@ src/
   webapp/           # Flask web UI (app, auth, background jobs)
 config/             # settings.example.yaml (+ your settings.yaml)
 docs/               # architecture + access-request guidance
-instructions/       # design/build instructions per agent
 tests/              # pytest suite + fixtures
 ```
 
