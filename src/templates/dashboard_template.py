@@ -219,14 +219,16 @@ _TEMPLATE = """<!DOCTYPE html>
 <title>Synapse to Fabric — Estate Dashboard</title>
 <style>
  body{font-family:Segoe UI,Arial,sans-serif;margin:0;background:#f5f7fa;color:#222}
- header.topbar{display:flex;align-items:center;gap:1rem;background:linear-gradient(90deg,#1565C0,#1976D2);color:#fff;padding:0 1.2rem;height:56px;box-shadow:0 2px 6px rgba(0,0,0,.18);position:sticky;top:0;z-index:70}
- .brand{display:flex;align-items:center;gap:.55rem;font-weight:600;font-size:1.05rem;white-space:nowrap}
+ header.topbar{display:flex;align-items:center;gap:.7rem;background:linear-gradient(90deg,#1565C0,#1976D2);color:#fff;padding:0 1.2rem;height:56px;box-shadow:0 2px 6px rgba(0,0,0,.18);position:sticky;top:0;z-index:70}
+ .brand{display:flex;align-items:center;gap:.55rem;font-weight:600;font-size:1.05rem;white-space:nowrap;flex:none}
  .brand-ico{flex:none}
- header.topbar .tabs{display:flex;align-items:center;gap:.2rem;margin-left:auto}
- .tab{background:transparent;border:0;color:#e3eefb;padding:.45rem .9rem;border-radius:20px;cursor:pointer;font-size:.9rem;white-space:nowrap;transition:background .15s,color .15s}
+ header.topbar .tabs{display:flex;align-items:center;gap:.15rem;flex:1 1 auto;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.5) transparent}
+ header.topbar .tabs::-webkit-scrollbar{height:5px}
+ header.topbar .tabs::-webkit-scrollbar-thumb{background:rgba(255,255,255,.45);border-radius:3px}
+ .tab{background:transparent;border:0;color:#e3eefb;padding:.4rem .7rem;border-radius:20px;cursor:pointer;font-size:.86rem;white-space:nowrap;flex:none;transition:background .15s,color .15s}
  .tab:hover{background:rgba(255,255,255,.16);color:#fff}
  .tab.active{background:#fff;color:#1565C0;font-weight:600}
- .ws-wrap{position:relative}
+ .ws-wrap{position:relative;flex:none}
  .ws-btn{display:inline-flex;align-items:center;gap:.45rem;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.4);color:#fff;padding:.4rem .8rem;border-radius:20px;cursor:pointer;font-size:.88rem;white-space:nowrap}
  .ws-btn:hover{background:rgba(255,255,255,.24)}
  .ws-badge{background:#fff;color:#1565C0;border-radius:10px;padding:0 .5rem;font-size:.76rem;font-weight:700;line-height:1.5}
