@@ -20,6 +20,8 @@ _VIEWS = [
     ("pipelineops", "Pipeline Ops"),
     ("spider", "Dependency Spider"),
     ("trigspider", "Trigger Spider"),
+    ("revspider", "Reverse Spider"),
+    ("lineage", "Lineage"),
 ]
 
 
@@ -179,6 +181,30 @@ def render_dashboard(data: dict[str, Any]) -> str:
             '<span style="color:#107c10;font-weight:600">● Notebook</span> / '
             '<span style="color:#5b8a3a;font-weight:600">● Data flow</span>. Use the workspace filter above to focus.</p>'
             '<svg id="trigSvg" width="100%" height="360" viewBox="0 0 1120 360"></svg></div></div>',
+        "revspider": '<div class="grid"><div class="card" style="grid-column:1/-1">'
+            '<h3>Reverse Dependency Spider</h3>'
+            '<p>Traces each notebook and data flow back to the pipeline(s) that run it, then to the trigger(s) that fire those pipelines — the inverse of the Trigger Spider. Artifacts with no pipeline or no trigger are still shown (as orphans). '
+            '<span style="color:#107c10;font-weight:600">● Notebook</span> / '
+            '<span style="color:#5b8a3a;font-weight:600">● Data flow</span> → '
+            '<span style="color:#c47f00;font-weight:600">● Pipeline</span> → '
+            '<span style="color:#a05a2c;font-weight:600">● Trigger</span>. Click any node for details.</p>'
+            '<p><button class="xbtn" id="revOrphanBtn">Hide unlinked</button> <span class="muted" id="revNote"></span></p>'
+            '<svg id="revSvg" width="100%" height="360" viewBox="0 0 1120 360"></svg></div></div>',
+        "lineage": '<div class="grid"><div class="card" style="grid-column:1/-1">'
+            '<h3>Dependency &amp; Lineage Explorer</h3>'
+            '<p>Every artifact with its <b>upstream</b> (what triggers or calls it) and <b>downstream</b> (what it runs or fires). Search or filter by type; click a row for full detail. '
+            '⏰ trigger · ▷ pipeline · 📓 notebook · 🔀 data flow.</p>'
+            '<div class="lin-ctrl"><input id="lin_q" type="search" placeholder="Search name, upstream or downstream…" oninput="renderLineage()">'
+            '<span class="lin-chips">'
+            '<button class="lchip active" data-lt="All" onclick="setLinType(this)">All</button>'
+            '<button class="lchip" data-lt="Trigger" onclick="setLinType(this)">Triggers</button>'
+            '<button class="lchip" data-lt="Pipeline" onclick="setLinType(this)">Pipelines</button>'
+            '<button class="lchip" data-lt="Notebook" onclick="setLinType(this)">Notebooks</button>'
+            '<button class="lchip" data-lt="Data flow" onclick="setLinType(this)">Data flows</button>'
+            '</span><span class="muted" id="lin_count"></span></div>'
+            '<div class="lin-tblwrap"><table class="lin-tbl"><thead><tr><th>Type</th><th>Artifact</th><th>Workspace</th>'
+            '<th>Upstream ▶ this</th><th>this ▶ Downstream</th></tr></thead><tbody id="lin_body"></tbody></table></div>'
+            '</div></div>',
     }
     body = "".join(f'<div id="{k}" class="view{" active" if i==0 else ""}">{views[k]}</div>'
                    for i, (k, _t) in enumerate(_VIEWS))
@@ -229,6 +255,18 @@ _TEMPLATE = """<!DOCTYPE html>
  .code{background:#0d1b2a;color:#cfe;padding:.8rem;border-radius:6px;max-height:340px;overflow:auto;font-size:.78rem;white-space:pre-wrap;word-break:break-word;margin:.3rem 0}
  .muted{color:#7a8aa0;font-size:.82rem}
  .facts{margin:.3rem 0 .6rem;padding-left:1.1rem}.facts li{margin:.15rem 0;font-size:.84rem}
+ .pill{display:inline-block;padding:1px 7px;border-radius:10px;font-size:.7rem;font-weight:700;color:#fff}
+ .pill.trig{background:#a05a2c}.pill.pipe{background:#c47f00}.pill.nb{background:#107c10}.pill.df{background:#5b8a3a}
+ .lin-ctrl{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:.4rem 0 .6rem}
+ .lin-ctrl input[type=search]{flex:1;min-width:220px;padding:.4rem .6rem;border:1px solid #cfd8e3;border-radius:6px;font-size:.85rem}
+ .lchip{font-size:.75rem;padding:3px 10px;border:1px solid #cfd8e3;background:#fff;color:#334;border-radius:14px;cursor:pointer}
+ .lchip.active{background:#1F4E78;color:#fff;border-color:#1F4E78}
+ .lin-tblwrap{max-height:640px;overflow:auto;border:1px solid #e2e8f0;border-radius:6px}
+ .lin-tbl{width:100%;border-collapse:collapse;font-size:.82rem}
+ .lin-tbl th{position:sticky;top:0;background:#f0f4f9;text-align:left;padding:.45rem .6rem;border-bottom:1px solid #dce4ee;z-index:1}
+ .lin-tbl td{padding:.4rem .6rem;border-bottom:1px solid #eef2f7;vertical-align:top}
+ .lin-tbl td:nth-child(4),.lin-tbl td:nth-child(5){color:#425067;font-size:.78rem;max-width:340px}
+ .lin-tbl tr:hover{background:#f7fafd}
 </style></head><body>
 <header class="topbar">
  <div class="brand"><svg class="brand-ico" width="22" height="22" viewBox="0 0 24 24"><rect x="2" y="2" width="9" height="9" rx="2" fill="#fff"/><rect x="13" y="2" width="9" height="9" rx="2" fill="#bcd9f5"/><rect x="2" y="13" width="9" height="9" rx="2" fill="#bcd9f5"/><rect x="13" y="13" width="9" height="9" rx="2" fill="#fff"/></svg><span>Synapse Assessment Report</span></div>
@@ -250,8 +288,8 @@ function updWsCount(){const el=document.getElementById('wsCount');if(el)el.textC
 (function(){const btn=document.getElementById('wsBtn'),panel=document.getElementById('wsPanel');if(btn)btn.onclick=e=>{e.stopPropagation();panel.classList.toggle('open');};document.addEventListener('click',e=>{if(panel&&panel.classList.contains('open')&&!panel.contains(e.target)&&!btn.contains(e.target))panel.classList.remove('open');});const g=document.getElementById('gear');if(g)g.onclick=()=>window.scrollTo({top:0,behavior:'smooth'});})();
 function sync(){updWsCount();const a=active();document.querySelectorAll('tr[data-ws]').forEach(tr=>{tr.style.display=a.includes(tr.dataset.ws)?'':'none';});
  document.querySelectorAll('.kpi[data-count]').forEach(k=>{const keys=k.dataset.count.split('|');let s=new Set();keys.forEach(key=>(D[key]||[]).forEach(r=>{if(a.includes(r.workspace)||a.includes(r.name))s.add((r.name||'')+key);}));k.textContent=s.size;});if(typeof applyBandFilter==='function')applyBandFilter();}
-document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.getElementById(b.dataset.view).classList.add('active');if(b.dataset.view==='spider')spider();if(b.dataset.view==='trigspider')trigSpider();if(b.dataset.view==='pipelineops')pipelineOps();if(b.dataset.view==='overview')overviewCharts();if(b.dataset.view==='fabready')fabReady();});
-document.querySelectorAll('.wsf').forEach(c=>c.onchange=()=>{sync();pipelineOps();overviewCharts();fabReady();if(document.getElementById('spider')&&document.getElementById('spider').closest('.view').classList.contains('active'))spider();if(document.getElementById('trigspider')&&document.getElementById('trigspider').classList.contains('active'))trigSpider();});
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.getElementById(b.dataset.view).classList.add('active');if(b.dataset.view==='spider')spider();if(b.dataset.view==='trigspider')trigSpider();if(b.dataset.view==='revspider')revSpider();if(b.dataset.view==='lineage')lineageView();if(b.dataset.view==='pipelineops')pipelineOps();if(b.dataset.view==='overview')overviewCharts();if(b.dataset.view==='fabready')fabReady();});
+document.querySelectorAll('.wsf').forEach(c=>c.onchange=()=>{sync();pipelineOps();overviewCharts();fabReady();if(document.getElementById('spider')&&document.getElementById('spider').closest('.view').classList.contains('active'))spider();if(document.getElementById('trigspider')&&document.getElementById('trigspider').classList.contains('active'))trigSpider();if(document.getElementById('revspider')&&document.getElementById('revspider').classList.contains('active'))revSpider();if(document.getElementById('lineage')&&document.getElementById('lineage').classList.contains('active'))lineageView();});
 document.querySelectorAll('.teamc, #team_dpw').forEach(i=>i.oninput=recalcTeam);
 const _cp=document.getElementById('team_copilot');if(_cp)_cp.onchange=recalcTeam;
 function esc(v){return (''+(v==null?'':v)).replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));}
@@ -281,6 +319,7 @@ function detail(rowjson,ws){let r={};try{r=JSON.parse(rowjson);}catch(e){}
 function closeD(){document.getElementById('drawer').classList.remove('open');document.getElementById('ov').classList.remove('open');}
 document.getElementById('dx').onclick=closeD;document.getElementById('ov').onclick=closeD;
 document.getElementById('fx').onclick=()=>document.getElementById('fs').classList.remove('open');
+(function(){const rb=document.getElementById('revOrphanBtn');if(rb)rb.onclick=()=>{showRevOrphans=!showRevOrphans;rb.textContent=showRevOrphans?'Hide unlinked':'Show unlinked';revSpider();};})();
 document.querySelectorAll('tr[data-ws]').forEach(tr=>tr.onclick=()=>{detail(tr.dataset.row||'{}',tr.dataset.ws);});
 document.querySelectorAll('#pipelineops tr[data-ws]').forEach(tr=>{tr.onclick=()=>{let r={};try{r=JSON.parse(tr.dataset.row||'{}');}catch(e){}if(!r.pipeline)return;poPipeline=(poPipeline&&poPipeline.pipeline===r.pipeline&&poPipeline.workspace===r.workspace)?null:{pipeline:r.pipeline,workspace:r.workspace};pipelineOps();};});
 const SVGNS='http://www.w3.org/2000/svg';
@@ -333,6 +372,62 @@ function trigDetail(nd){if(!nd)return;const open=h=>{document.getElementById('dc
  if(nd.type==='nb'||nd.type==='df')h+='<p class="muted">'+(nd.type==='nb'?'Notebook':'Data flow')+' step invoked by a pipeline activity in <b>'+esc(nd.ws)+'</b>. The matching artifact was not found in the current inventory \u2014 the label shown is the activity name. Re-run inventory with read access to capture its full detail.</p>';
  else h+='<p class="muted">Pipeline <b>'+esc(nd.label)+'</b> in '+esc(nd.ws)+' \u2014 no detailed activity record captured. Re-run inventory to populate its activity flow.</p>';
  open(h);}
+let _lineage=null;
+function buildLineage(){if(_lineage)return _lineage;
+ const runsLeaf={},callsPipe={},calledBy={},leafPipes={},pipeByKey={},trigByKey={},trigReach={},pipeTrigs={};
+ (D.pipelines||[]).forEach(p=>{pipeByKey[p.workspace+'|'+p.name]=p;});
+ (D.triggers||[]).forEach(t=>{trigByKey[t.workspace+'|'+t.name]=t;});
+ (D.pipeline_activities||[]).forEach(x=>{const pk=x.workspace+'|'+x.pipeline,tp=x.activity_type;
+  if(tp==='SynapseNotebook'&&x.target){(runsLeaf[pk]=runsLeaf[pk]||[]).push({type:'nb',name:x.target});const lk=x.workspace+'|nb|'+x.target;(leafPipes[lk]=leafPipes[lk]||new Set()).add(x.pipeline);}
+  else if(tp==='ExecuteDataFlow'&&x.target){(runsLeaf[pk]=runsLeaf[pk]||[]).push({type:'df',name:x.target});const lk=x.workspace+'|df|'+x.target;(leafPipes[lk]=leafPipes[lk]||new Set()).add(x.pipeline);}
+  else if(tp==='ExecutePipeline'&&x.target){(callsPipe[pk]=callsPipe[pk]||[]).push(x.target);const ck=x.workspace+'|'+x.target;(calledBy[ck]=calledBy[ck]||new Set()).add(x.pipeline);}});
+ (D.triggers||[]).forEach(t=>{const ws=t.workspace,reach=new Set(),seen=new Set(),stack=[...(t.pipelines||[])];while(stack.length){const p=stack.pop();if(seen.has(p))continue;seen.add(p);reach.add(p);(callsPipe[ws+'|'+p]||[]).forEach(c=>{if(!seen.has(c))stack.push(c);});}trigReach[ws+'|'+t.name]=reach;reach.forEach(p=>{const pk=ws+'|'+p;(pipeTrigs[pk]=pipeTrigs[pk]||new Set()).add(t.name);});});
+ const toArr=o=>{const r={};Object.keys(o).forEach(k=>r[k]=[...o[k]]);return r;};
+ _lineage={runsLeaf,callsPipe,calledBy:toArr(calledBy),leafPipes:toArr(leafPipes),pipeByKey,trigByKey,pipeTrigs:toArr(pipeTrigs),trigReach};return _lineage;}
+let showRevOrphans=true,_revNodes=[];
+function revSpider(){const svg=document.getElementById('revSvg');if(!svg)return;const a=active();const L=buildLineage();
+ const W=1120,boxW=250,boxH=24,rowH=32,padT=46,colL=40,colP=435,colT=820;const COL={nb:'#107c10',df:'#5b8a3a',pipe:'#c47f00',trig:'#a05a2c'};
+ const pipesOf=l=>L.leafPipes[l.ws+'|'+l.type+'|'+l.name]||[];
+ let leaves=[];(D.notebooks||[]).forEach(nn=>{if(a.includes(nn.workspace))leaves.push({type:'nb',name:nn.name,ws:nn.workspace,data:nn});});(D.dataflows||[]).forEach(dd=>{if(a.includes(dd.workspace))leaves.push({type:'df',name:dd.name,ws:dd.workspace,data:dd});});
+ const total=leaves.length,linked=leaves.filter(l=>pipesOf(l).length).length;
+ if(!showRevOrphans)leaves=leaves.filter(l=>pipesOf(l).length);
+ leaves.sort((x,y)=>{const lx=pipesOf(x).length?0:1,ly=pipesOf(y).length?0:1;return lx-ly||x.type.localeCompare(y.type)||x.name.localeCompare(y.name);});
+ const note=document.getElementById('revNote');if(note)note.textContent=total+' notebook/data-flow node(s) \u00b7 '+linked+' linked to a pipeline \u00b7 '+(total-linked)+' unlinked'+(showRevOrphans?'':' (hidden)');
+ if(!leaves.length){svg.setAttribute('viewBox','0 0 '+W+' 90');svg.setAttribute('height',90);svg.innerHTML='<text x="20" y="48" font-size="13" fill="#888">No notebooks or data flows to show for the selected workspaces / toggle.</text>';_revNodes=[];return;}
+ const nodes=[],edges=[],pipeIdx={},trigIdx={},pipeYs={},trigYs={};let slot=0;
+ leaves.forEach(l=>{const y=padT+slot*rowH;slot++;const li=nodes.length;nodes.push({x:colL,y,label:l.name,type:l.type,ws:l.ws,data:l.data});
+  pipesOf(l).forEach(pn=>{const pk=l.ws+'|'+pn;if(pipeIdx[pk]==null){pipeIdx[pk]=nodes.length;nodes.push({x:colP,y:0,label:pn,type:'pipe',ws:l.ws,data:L.pipeByKey[pk]||{name:pn,workspace:l.ws}});pipeYs[pk]=[];}edges.push([li,pipeIdx[pk]]);pipeYs[pk].push(y);});});
+ Object.keys(pipeIdx).forEach(pk=>{const ys=pipeYs[pk];nodes[pipeIdx[pk]].y=ys.reduce((s,v)=>s+v,0)/ys.length;const ws=pk.slice(0,pk.indexOf('|'));
+  (L.pipeTrigs[pk]||[]).forEach(tn=>{const tk=ws+'|'+tn;if(trigIdx[tk]==null){trigIdx[tk]=nodes.length;nodes.push({x:colT,y:0,label:tn,type:'trig',ws,data:L.trigByKey[tk]||{name:tn,workspace:ws}});trigYs[tk]=[];}edges.push([pipeIdx[pk],trigIdx[tk]]);trigYs[tk].push(nodes[pipeIdx[pk]].y);});});
+ Object.keys(trigIdx).forEach(tk=>{const ys=trigYs[tk];nodes[trigIdx[tk]].y=ys.reduce((s,v)=>s+v,0)/ys.length;});
+ const declut=idxs=>{idxs.sort((i,j)=>nodes[i].y-nodes[j].y);for(let k=1;k<idxs.length;k++){if(nodes[idxs[k]].y<nodes[idxs[k-1]].y+boxH+4)nodes[idxs[k]].y=nodes[idxs[k-1]].y+boxH+4;}};
+ declut(Object.values(pipeIdx));declut(Object.values(trigIdx));
+ let maxY=padT;nodes.forEach(nd=>{if(nd.y>maxY)maxY=nd.y;});const H=Math.max(120,maxY+boxH+12);
+ let e='';edges.forEach(p=>{const P=nodes[p[0]],C=nodes[p[1]];const x1=P.x+boxW,y1=P.y+boxH/2,x2=C.x,y2=C.y+boxH/2,mx=(x1+x2)/2;e+='<path d="M'+x1+' '+y1+' C'+mx+' '+y1+' '+mx+' '+y2+' '+x2+' '+y2+'" fill="none" stroke="#c3cdda" stroke-width="1.2"/>';});
+ let n='';nodes.forEach((nd,i)=>{const c=COL[nd.type];n+='<g data-ri="'+i+'" style="cursor:pointer"><title>'+esc(nd.label)+' \u2014 click for details</title><rect x="'+nd.x+'" y="'+nd.y+'" width="'+boxW+'" height="'+boxH+'" rx="5" fill="'+c+'" stroke="#fff" stroke-width="1"/><text x="'+(nd.x+9)+'" y="'+(nd.y+boxH/2+3.5)+'" font-size="10.5" fill="#fff" font-weight="bold" style="pointer-events:none">'+esc(trim(nd.label,33))+'</text></g>';});
+ const heads='<text x="'+colL+'" y="24" font-size="12" font-weight="bold" fill="#107c10">Notebooks / Data flows</text><text x="'+colP+'" y="24" font-size="12" font-weight="bold" fill="#c47f00">Pipelines</text><text x="'+colT+'" y="24" font-size="12" font-weight="bold" fill="#a05a2c">Triggers</text>';
+ svg.setAttribute('viewBox','0 0 '+W+' '+H);svg.setAttribute('height',H);svg.innerHTML=heads+e+n;_revNodes=nodes;
+ svg.querySelectorAll('[data-ri]').forEach(g=>g.onclick=()=>trigDetail(_revNodes[+g.getAttribute('data-ri')]));}
+let _linRows=[],_linFiltered=[],linType='All';
+function lineageRows(){const L=buildLineage();const a=active();const rows=[];
+ (D.triggers||[]).forEach(t=>{if(!a.includes(t.workspace))return;rows.push({type:'Trigger',ntype:'trig',name:t.name,ws:t.workspace,up:t.init_method||t.trigger_type||'schedule/event',down:(t.pipelines||[]).map(x=>'\u25b7'+x).join(', ')||'\u2014',data:t});});
+ (D.pipelines||[]).forEach(p=>{if(!a.includes(p.workspace))return;const pk=p.workspace+'|'+p.name;const trigs=L.pipeTrigs[pk]||[],parents=L.calledBy[pk]||[],kids=L.callsPipe[pk]||[],lv=L.runsLeaf[pk]||[];
+  const up=[...trigs.map(x=>'\u23f0'+x),...parents.map(x=>'\u25b7'+x)].join(', ')||'\u2014 (no trigger/parent)';
+  const seen={},lvd=lv.filter(l=>{const k=l.type+l.name;if(seen[k])return false;seen[k]=1;return true;});
+  const down=[...kids.map(x=>'\u25b7'+x),...lvd.map(l=>(l.type==='nb'?'\U0001F4D3':'\U0001F500')+l.name)].join(', ')||'\u2014';
+  rows.push({type:'Pipeline',ntype:'pipe',name:p.name,ws:p.workspace,up,down,data:p});});
+ const leafRow=(nn,tp,label)=>{const pipes=L.leafPipes[nn.workspace+'|'+tp+'|'+nn.name]||[];const trigs=new Set();pipes.forEach(pn=>(L.pipeTrigs[nn.workspace+'|'+pn]||[]).forEach(t=>trigs.add(t)));
+  const up=[...[...trigs].map(x=>'\u23f0'+x),...pipes.map(x=>'\u25b7'+x)].join(', ')||'\u2014 (orphan \u2014 no pipeline)';rows.push({type:label,ntype:tp,name:nn.name,ws:nn.workspace,up,down:'\u2014',data:nn});};
+ (D.notebooks||[]).forEach(nn=>{if(a.includes(nn.workspace))leafRow(nn,'nb','Notebook');});
+ (D.dataflows||[]).forEach(dd=>{if(a.includes(dd.workspace))leafRow(dd,'df','Data flow');});
+ return rows;}
+function lineageView(){_linRows=lineageRows();renderLineage();}
+function setLinType(btn){linType=btn.getAttribute('data-lt');document.querySelectorAll('.lchip').forEach(c=>c.classList.toggle('active',c===btn));renderLineage();}
+function renderLineage(){const tbody=document.getElementById('lin_body');if(!tbody)return;const qEl=document.getElementById('lin_q');const q=(qEl?qEl.value:'').toLowerCase();
+ let rows=_linRows;if(linType!=='All')rows=rows.filter(r=>r.type===linType);if(q)rows=rows.filter(r=>(r.name+' '+r.up+' '+r.down+' '+r.ws).toLowerCase().includes(q));
+ _linFiltered=rows;const cnt=document.getElementById('lin_count');if(cnt)cnt.textContent=rows.length+' item(s)'+(rows.length>600?' (showing first 600)':'');
+ tbody.innerHTML=rows.slice(0,600).map((r,i)=>'<tr data-li="'+i+'" style="cursor:pointer"><td><span class="pill '+r.ntype+'">'+esc(r.type)+'</span></td><td><b>'+esc(r.name)+'</b></td><td>'+esc(r.ws)+'</td><td>'+esc(r.up)+'</td><td>'+esc(r.down)+'</td></tr>').join('');
+ tbody.querySelectorAll('[data-li]').forEach(tr=>tr.onclick=()=>{const r=_linFiltered[+tr.getAttribute('data-li')];trigDetail({type:r.ntype,label:r.name,ws:r.ws,data:r.data});});}
 function drillGroup(ws,k){const items=(D[k]||[]).filter(r=>r.workspace===ws);let h='<h2>'+esc(ws)+' — '+k.replace(/_/g,' ')+'</h2><table>';if(items.length){const cols=Object.keys(items[0]).slice(0,4);h+='<tr>'+cols.map(c=>'<th>'+esc(c)+'</th>').join('')+'</tr>';items.slice(0,80).forEach(it=>h+='<tr>'+cols.map(c=>'<td>'+esc(it[c])+'</td>').join('')+'</tr>');}h+='</table>';document.getElementById('dc').innerHTML=h;document.getElementById('drawer').classList.add('open');document.getElementById('ov').classList.add('open');}
 function att(v){return esc(v).replace(/"/g,'&quot;');}
 function trim(s,n){s=''+(s==null?'':s);return s.length>n?s.slice(0,n-1)+'\u2026':s;}
