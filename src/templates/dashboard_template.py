@@ -18,9 +18,9 @@ _VIEWS = [
     ("integration", "Data Integration"),
     ("fabready", "Fabric Readiness"),
     ("pipelineops", "Pipeline Ops"),
-    ("spider", "Dependency Diagram"),
+    ("spider", "Workspace Diagram"),
     ("trigspider", "Trigger Diagram"),
-    ("revspider", "Reverse Diagram"),
+    ("revspider", "Dependency Diagram"),
     ("lineage", "Lineage"),
 ]
 
@@ -185,7 +185,7 @@ def render_dashboard(data: dict[str, Any]) -> str:
                      "batch_runs", "realtime_runs", "success_rate", "avg_duration_ms", "max_duration_ms", "last_run"])
             + "</div>",
         "spider": '<div class="grid"><div class="card" style="grid-column:1/-1">'
-            '<h3>Workspace Dependency Diagram</h3>'
+            '<h3>Workspace Diagram</h3>'
             '<p>Each workspace radiates to its artifact groups; click a node to inspect. Use the workspace filter above to focus.</p>'
             '<svg id="spiderSvg" width="100%" height="640" viewBox="0 0 1280 640"></svg></div></div>',
         "trigspider": '<div class="grid"><div class="card" style="grid-column:1/-1">'
