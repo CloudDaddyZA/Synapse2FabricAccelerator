@@ -18,6 +18,8 @@ def test_migration(seeded):
     assert r["recommendations"] >= 4
     assert (seeded.subdir("migration") / "migration_wave_plan.xlsx").exists()
     assert (seeded.subdir("migration") / "synapse_to_fabric_mapping.md").exists()
+    assert (seeded.subdir("migration") / "migration_assistant" / "handoff_manifest.json").exists()
+    assert r["fdfma_auto"] >= 1
 
 
 def test_reporting(seeded):

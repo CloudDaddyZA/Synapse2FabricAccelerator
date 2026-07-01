@@ -9,6 +9,7 @@ from __future__ import annotations
 from ..exporters.excel_writer import write_workbook
 from ..exporters.json_writer import read_json, write_json
 from ..exporters.markdown_writer import write_markdown
+from ..exporters.migration_assistant import write_migration_assistant_pack
 from ..models.assessment import (
     FabricRecommendation,
     MigrationPlan,
@@ -84,6 +85,16 @@ class MigrationAgent(BaseAgent):
         write_markdown("# Cutover Checklist\n\n- Freeze source pipelines\n- Validate Fabric pipelines\n- Switch reporting to semantic models\n- Confirm OneLake data parity", out / "cutover_checklist.md")
         write_markdown("# Validation Checklist\n\n- Row counts match\n- Schema parity\n- Job duration baseline\n- Security/RBAC parity", out / "validation_checklist.md")
         write_markdown("# Decommission Plan\n\n- Confirm Fabric stability (2 weeks)\n- Archive Synapse artifacts\n- Remove pools\n- Delete workspace", out / "decommission_plan.md")
+        # FDFMA hand-off pack: ARM templates (when a live inventory captured raw
+        # defs) + support-tier manifest for the Fabric Data Factory Migration Assistant.
+        raw_path = self.settings.subdir("inventory") / "raw_definitions.json"
+        raw = read_json(raw_path) if raw_path.exists() else None
+        pack = write_migration_assistant_pack(out / "migration_assistant", inv, raw)
         self.save_errors("migration_errors.json")
         self.logger.info("Migration planning complete: %d recs", len(plan.recommendations))
-        return {"recommendations": len(plan.recommendations), "waves": len(set(w.wave for w in plan.waves))}
+        return {
+            "recommendations": len(plan.recommendations),
+            "waves": len(set(w.wave for w in plan.waves)),
+            "fdfma_auto": pack["totals"]["auto"],
+            "fdfma_manual": pack["totals"]["manual"],
+        }

@@ -30,6 +30,8 @@ The accelerator is a small, modular Python package. Each subpackage has a single
 - `json_writer.py`, `csv_writer.py`, `excel_writer.py` — structured data writers.
 - `markdown_writer.py` — Markdown plus `write_html` (autoescape on; bodies are wrapped in `Markup`, with inline `**bold**` / `` `code` `` support).
 - `powerbi_pbip.py` — generates `powerbi/SynapseMigration.pbip`; table column lists must match the CSV headers exactly.
+- `arm_template.py` — pure functions (`build_arm_template`, `write_arm_template`) that assemble a Synapse `Microsoft.Synapse/workspaces/*` ARM template from raw REST bodies, emitting `dependsOn` only on earlier artifact kinds (`linkedservices → datasets → dataflows → notebooks → pipelines → triggers`) to guarantee a DAG.
+- `migration_assistant.py` — writes the **Fabric Data Factory Migration Assistant (FDFMA)** hand-off pack (`write_migration_assistant_pack`): per-workspace `<workspace>.arm.json` (when raw defs are available), a `handoff_manifest.json` with auto/manual support tiers, a `fdfma_scope.csv`, and a `README.md`.
 
 ## `templates/`
 

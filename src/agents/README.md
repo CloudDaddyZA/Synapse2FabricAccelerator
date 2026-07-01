@@ -25,7 +25,7 @@ For each workspace, collects via the Synapse data-plane REST API and SQL DMVs:
 - **Notebooks** (language, cells, Spark/Delta/MSSparkUtils/Spark-config flags, secret detection, code preview).
 - **Spark pools**, **SQL pools** (with best-effort table sizing), **triggers**, **linked services**, **datasets**, **integration runtimes**, **storage dependencies**, and **Git config**.
 
-Writes `synapse_inventory.json`, a multi-sheet Excel workbook (one sheet per artifact type, incl. **Dataflows**), an `artifact_index.csv`, a `dependency_map.json`, and per-artifact errors to `output/logs/`. Records an access status per workspace (Accessible / Partial / Forbidden).
+Writes `synapse_inventory.json`, a multi-sheet Excel workbook (one sheet per artifact type, incl. **Dataflows**), an `artifact_index.csv`, a `dependency_map.json`, and per-artifact errors to `output/logs/`. Records an access status per workspace (Accessible / Partial / Forbidden). Also retains the raw REST bodies for pipelines, data flows, datasets, linked services, and triggers in `raw_definitions.json` — the source material the Migration agent turns into FDFMA ARM templates.
 
 ## 3. Assessment — `assessment_agent.py`
 Scores every artifact and computes Fabric readiness:
@@ -38,6 +38,8 @@ Writes `assessment_summary.json`, `complexity_scores.json`, `migration_complexit
 
 ## 4. Migration — `migration_agent.py`
 Maps each source artifact to a Fabric target (`FabricRecommendation`) and builds a phased **wave plan** (workspaces → SQL pools → pipelines/**data flows** → notebooks/Spark). Writes `fabric_recommendations.json`, `migration_waves.json`, `synapse_to_fabric_mapping.md`, `migration_path.md`, and cutover / validation / decommission checklists.
+
+Also emits the **Fabric Data Factory Migration Assistant (FDFMA)** hand-off pack under `output/migration/migration_assistant/`: a per-workspace `<workspace>.arm.json` Synapse ARM template (built from `raw_definitions.json`, when present), a `handoff_manifest.json` splitting artifacts into auto-migratable (pipelines, triggers, linked services, datasets) vs. manual (notebooks, data flows) tiers, a `fdfma_scope.csv`, and a `README.md`. Upload the ARM template to [FDFMA](https://github.com/microsoft/fabric-toolbox/tree/main/tools/FabricDataFactoryMigrationAssistant) to deploy the auto-migratable artifacts into Fabric.
 
 ## 5. Reporting — `reporting_agent.py`
 Generates 13 Markdown + HTML reports from saved JSON:

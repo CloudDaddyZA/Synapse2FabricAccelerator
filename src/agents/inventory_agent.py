@@ -50,6 +50,8 @@ class InventoryAgent(BaseAgent):
         super().__init__(settings)
         self.credential = get_credential(self.settings)
         self.clients = AzureClients(self.credential)
+        # Raw REST bodies retained per workspace/kind for the ARM-template feeder.
+        self.raw_defs: dict[str, dict[str, list[dict[str, Any]]]] = {}
 
     def _load_workspaces(self) -> list[Workspace]:
         path = self.settings.subdir("discovery") / "workspaces.json"
@@ -181,9 +183,15 @@ class InventoryAgent(BaseAgent):
             self.errors.add(ctx, exc)
             return []
 
+    def _stash(self, ws_name: str, kind: str, items: list[dict[str, Any]]) -> None:
+        """Retain raw artifact bodies for the ARM-template / FDFMA feeder."""
+        self.raw_defs.setdefault(ws_name, {})[kind] = items or []
+
     def _pipelines(self, ws, rest) -> tuple[list[Pipeline], list[PipelineActivity]]:
         pls, acts = [], []
-        for raw in self._safe(f"pipelines:{ws.name}", rest.pipelines):
+        raw_list = self._safe(f"pipelines:{ws.name}", rest.pipelines)
+        self._stash(ws.name, "pipelines", raw_list)
+        for raw in raw_list:
             props = raw.get("properties", {})
             activities = props.get("activities", [])
             types = [a.get("type", "") for a in activities]
@@ -323,7 +331,9 @@ class InventoryAgent(BaseAgent):
 
     def _triggers(self, ws, rest) -> list[Trigger]:
         out = []
-        for raw in self._safe(f"triggers:{ws.name}", rest.triggers):
+        raw_list = self._safe(f"triggers:{ws.name}", rest.triggers)
+        self._stash(ws.name, "triggers", raw_list)
+        for raw in raw_list:
             p = raw.get("properties", {})
             ttype = p.get("type", "")
             tp = p.get("typeProperties", {})
@@ -351,7 +361,9 @@ class InventoryAgent(BaseAgent):
 
     def _linked_services(self, ws, rest) -> list[LinkedService]:
         out = []
-        for raw in self._safe(f"linked_services:{ws.name}", rest.linked_services):
+        raw_list = self._safe(f"linked_services:{ws.name}", rest.linked_services)
+        self._stash(ws.name, "linkedservices", raw_list)
+        for raw in raw_list:
             p = raw.get("properties", {})
             out.append(LinkedService(
                 name=raw.get("name", ""), workspace=ws.name, service_type=p.get("type", ""),
@@ -361,7 +373,9 @@ class InventoryAgent(BaseAgent):
 
     def _datasets(self, ws, rest) -> list[Dataset]:
         out = []
-        for raw in self._safe(f"datasets:{ws.name}", rest.datasets):
+        raw_list = self._safe(f"datasets:{ws.name}", rest.datasets)
+        self._stash(ws.name, "datasets", raw_list)
+        for raw in raw_list:
             p = raw.get("properties", {})
             out.append(Dataset(
                 name=raw.get("name", ""), workspace=ws.name, dataset_type=p.get("type", ""),
@@ -378,7 +392,9 @@ class InventoryAgent(BaseAgent):
 
     def _dataflows(self, ws, rest) -> list[Dataflow]:
         out = []
-        for raw in self._safe(f"dataflows:{ws.name}", rest.dataflows):
+        raw_list = self._safe(f"dataflows:{ws.name}", rest.dataflows)
+        self._stash(ws.name, "dataflows", raw_list)
+        for raw in raw_list:
             p = raw.get("properties", {})
             tp = p.get("typeProperties", {})
             sources = tp.get("sources", []) or []
@@ -445,6 +461,7 @@ class InventoryAgent(BaseAgent):
                 self.errors.add(f"workspace:{ws.name}", exc)
         out = self.output_dir
         write_json(inventory.model_dump(), out / "synapse_inventory.json")
+        write_json(self.raw_defs, out / "raw_definitions.json")
         self._write_excel(inventory, out)
         self._write_index(inventory, out)
         self._write_dependency_map(inventory, out)

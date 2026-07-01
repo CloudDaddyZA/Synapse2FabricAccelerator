@@ -48,6 +48,7 @@ It runs read-only against your Synapse environment, produces consultant-ready de
 - **Inventory** of pipelines, **mapping & wrangling data flows**, notebooks, Spark/SQL pools, triggers, linked services, datasets, integration runtimes, storage dependencies, Git config, and **pipeline run history**.
 - **Assessment** with risk/complexity scoring (Low/Medium/High/Critical), per-artifact migration effort estimates, and Fabric readiness analysis.
 - **Migration** mapping to Fabric targets, a phased wave plan, and cutover / validation / decommission checklists.
+- **Fabric Data Factory Migration Assistant (FDFMA) feeder** — emits per-workspace Synapse ARM templates plus an auto/manual support-tier manifest, ready to upload to Microsoft's [FDFMA](https://github.com/microsoft/fabric-toolbox/tree/main/tools/FabricDataFactoryMigrationAssistant) for one-click deployment of pipelines, triggers, linked services, and datasets into Fabric.
 - **Reports** — executive, technical, and role-aligned (admin, data engineering, data warehousing, data integration) in Markdown and HTML.
 - **Offline HTML dashboard** — fully self-contained (inline SVG charts, no CDN), with workspace filtering, drill-down drawers, pipeline-flow diagrams (expandable to full screen), pipeline run analytics, a grouped **Diagrams** menu (Workspace, Trigger Dependency, Dependency, and Lineage views), and a Fabric Readiness view with a **delivery-team & timeline planner** (role head-counts + GitHub Copilot productivity uplift drive an estimated calendar duration).
 - **Power BI** — a ready-to-open `.pbip` project plus CSV datasets and a model guide.
@@ -244,9 +245,9 @@ Enter head-counts per role and pick a **GitHub Copilot** productivity tier to co
 | Folder | Contents |
 |---|---|
 | `output/discovery/` | subscriptions, resource groups, workspaces, summary |
-| `output/inventory/` | inventory JSON/Excel, artifact index, dependency map |
+| `output/inventory/` | inventory JSON/Excel, artifact index, dependency map, raw artifact definitions |
 | `output/assessment/` | scores, complexity, optimizations, risk register, readiness, findings |
-| `output/migration/` | mapping, recommendations, wave plan, cutover/validation/decommission checklists |
+| `output/migration/` | mapping, recommendations, wave plan, cutover/validation/decommission checklists, FDFMA hand-off pack (`migration_assistant/`) |
 | `output/reports/` | executive + technical + role reports (MD/HTML) |
 | `output/dashboard/` | offline HTML dashboard |
 | `output/copilot_optimization_pack/` | review prompts + index |
