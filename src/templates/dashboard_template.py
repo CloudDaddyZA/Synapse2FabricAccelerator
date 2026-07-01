@@ -365,11 +365,12 @@ _TEMPLATE = """<!DOCTYPE html>
 <title>Synapse to Fabric — Estate Dashboard</title>
 <style>
  body{font-family:Segoe UI,Arial,sans-serif;margin:0;background:#f5f7fa;color:#222}
- header.topbar{display:flex;align-items:center;gap:.5rem;background:linear-gradient(90deg,#1565C0,#1976D2);color:#fff;padding:0 1rem;height:56px;box-shadow:0 2px 6px rgba(0,0,0,.18);position:sticky;top:0;z-index:70}
- .brand{display:flex;align-items:center;gap:.5rem;font-weight:600;font-size:.97rem;white-space:nowrap;flex:none}
+ header.topbar{display:flex;align-items:center;gap:.4rem;background:linear-gradient(90deg,#1565C0,#1976D2);color:#fff;padding:0 .7rem;height:56px;box-shadow:0 2px 6px rgba(0,0,0,.18);position:sticky;top:0;z-index:70}
+ .brand{display:flex;align-items:center;gap:.45rem;font-weight:600;font-size:.92rem;white-space:nowrap;flex:none}
  .brand-ico{flex:none}
- header.topbar .tabs{display:flex;align-items:center;gap:.08rem;margin-left:auto;flex-wrap:nowrap}
- .tab{background:transparent;border:0;color:#e3eefb;padding:.38rem .52rem;border-radius:20px;cursor:pointer;font-size:.83rem;white-space:nowrap;flex:none;transition:background .15s,color .15s}
+ header.topbar .tabs{display:flex;align-items:center;gap:.06rem;margin-left:auto;flex:0 1 auto;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+ header.topbar .tabs::-webkit-scrollbar{display:none}
+ .tab{background:transparent;border:0;color:#e3eefb;padding:.34rem .46rem;border-radius:20px;cursor:pointer;font-size:.8rem;white-space:nowrap;flex:none;transition:background .15s,color .15s}
  .tab:hover{background:rgba(255,255,255,.16);color:#fff}
  .tab.active{background:#fff;color:#1565C0;font-weight:600}
  .dd{position:relative;flex:none}
@@ -380,7 +381,7 @@ _TEMPLATE = """<!DOCTYPE html>
  .dd-menu .ddi:hover{background:#eef4fb}
  .dd-menu .ddi.active{background:#1565C0;color:#fff}
  .ws-wrap{position:relative;flex:none}
- .ws-btn{display:inline-flex;align-items:center;gap:.45rem;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.4);color:#fff;padding:.4rem .8rem;border-radius:20px;cursor:pointer;font-size:.88rem;white-space:nowrap}
+ .ws-btn{display:inline-flex;align-items:center;gap:.4rem;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.4);color:#fff;padding:.36rem .7rem;border-radius:20px;cursor:pointer;font-size:.85rem;white-space:nowrap;flex:none}
  .ws-btn:hover{background:rgba(255,255,255,.24)}
  .ws-badge{background:#fff;color:#1565C0;border-radius:10px;padding:0 .5rem;font-size:.76rem;font-weight:700;line-height:1.5}
  .ws-caret{font-size:.7rem;opacity:.85}
@@ -391,6 +392,8 @@ _TEMPLATE = """<!DOCTYPE html>
  .ws-panel label:hover{background:#eef4fb}
  .gear{flex:none;width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.12);color:#fff;cursor:pointer;font-size:1rem;line-height:1}
  .gear:hover{background:rgba(255,255,255,.24)}
+ @media(max-width:1280px){.brand .brand-txt{display:none}}
+ @media(max-width:1024px){.ws-btn .ws-lbl{display:none}}
  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;padding:1.5rem}
  .card{background:#fff;border-radius:8px;padding:1rem;box-shadow:0 1px 4px rgba(0,0,0,.1);overflow:auto}
  .kpi{font-size:2rem;font-weight:bold;color:#1F4E78}.view{display:none}.view.active{display:block}
@@ -429,10 +432,10 @@ _TEMPLATE = """<!DOCTYPE html>
  .linref.trig{color:#a05a2c}.linref.pipe{color:#c47f00}.linref.nb{color:#107c10}.linref.df{color:#5b8a3a}
 </style></head><body>
 <header class="topbar">
- <div class="brand"><svg class="brand-ico" width="22" height="22" viewBox="0 0 24 24"><rect x="2" y="2" width="9" height="9" rx="2" fill="#fff"/><rect x="13" y="2" width="9" height="9" rx="2" fill="#bcd9f5"/><rect x="2" y="13" width="9" height="9" rx="2" fill="#bcd9f5"/><rect x="13" y="13" width="9" height="9" rx="2" fill="#fff"/></svg><span>Synapse Assessment Report</span></div>
+ <div class="brand"><svg class="brand-ico" width="22" height="22" viewBox="0 0 24 24"><rect x="2" y="2" width="9" height="9" rx="2" fill="#fff"/><rect x="13" y="2" width="9" height="9" rx="2" fill="#bcd9f5"/><rect x="2" y="13" width="9" height="9" rx="2" fill="#bcd9f5"/><rect x="13" y="13" width="9" height="9" rx="2" fill="#fff"/></svg><span class="brand-txt">Synapse Assessment Report</span></div>
  <nav class="tabs">{tabs}</nav>
  <div class="ws-wrap">
-  <button class="ws-btn" id="wsBtn">▤ Workspaces <span class="ws-badge" id="wsCount">0</span><span class="ws-caret">▾</span></button>
+  <button class="ws-btn" id="wsBtn">▤ <span class="ws-lbl">Workspaces </span><span class="ws-badge" id="wsCount">0</span><span class="ws-caret">▾</span></button>
   <div class="ws-panel" id="wsPanel"><div class="ws-panel-head">Filter workspaces</div>{boxes}</div>
  </div>
  <button class="gear" id="gear" title="Back to top">⚙</button>
