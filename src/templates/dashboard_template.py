@@ -267,6 +267,11 @@ _TEMPLATE = """<!DOCTYPE html>
  .lin-tbl td{padding:.4rem .6rem;border-bottom:1px solid #eef2f7;vertical-align:top}
  .lin-tbl td:nth-child(4),.lin-tbl td:nth-child(5){color:#425067;font-size:.78rem;max-width:340px}
  .lin-tbl tr:hover{background:#f7fafd}
+ .lin-name{font-weight:700;color:#1F4E78;cursor:pointer}
+ .lin-name:hover{text-decoration:underline}
+ .linref{display:inline-block;cursor:pointer;border-radius:4px;padding:0 3px;margin:1px 0;white-space:nowrap;border-bottom:1px dotted transparent}
+ .linref:hover{background:#eef4fb;border-bottom-color:currentColor}
+ .linref.trig{color:#a05a2c}.linref.pipe{color:#c47f00}.linref.nb{color:#107c10}.linref.df{color:#5b8a3a}
 </style></head><body>
 <header class="topbar">
  <div class="brand"><svg class="brand-ico" width="22" height="22" viewBox="0 0 24 24"><rect x="2" y="2" width="9" height="9" rx="2" fill="#fff"/><rect x="13" y="2" width="9" height="9" rx="2" fill="#bcd9f5"/><rect x="2" y="13" width="9" height="9" rx="2" fill="#bcd9f5"/><rect x="13" y="13" width="9" height="9" rx="2" fill="#fff"/></svg><span>Synapse Assessment Report</span></div>
@@ -409,25 +414,31 @@ function revSpider(){const svg=document.getElementById('revSvg');if(!svg)return;
  svg.setAttribute('viewBox','0 0 '+W+' '+H);svg.setAttribute('height',H);svg.innerHTML=heads+e+n;_revNodes=nodes;
  svg.querySelectorAll('[data-ri]').forEach(g=>g.onclick=()=>trigDetail(_revNodes[+g.getAttribute('data-ri')]));}
 let _linRows=[],_linFiltered=[],linType='All';
+const _LICON={trig:'\u23f0',pipe:'\u25b7',nb:'\U0001F4D3',df:'\U0001F500'};
 function lineageRows(){const L=buildLineage();const a=active();const rows=[];
- (D.triggers||[]).forEach(t=>{if(!a.includes(t.workspace))return;rows.push({type:'Trigger',ntype:'trig',name:t.name,ws:t.workspace,up:t.init_method||t.trigger_type||'schedule/event',down:(t.pipelines||[]).map(x=>'\u25b7'+x).join(', ')||'\u2014',data:t});});
+ const mk=(o)=>{o._s=(o.name+' '+o.ws+' '+(o.upPlain||'')+' '+[...(o.upItems||[]),...(o.downItems||[])].map(i=>i.n).join(' ')).toLowerCase();rows.push(o);};
+ (D.triggers||[]).forEach(t=>{if(!a.includes(t.workspace))return;mk({type:'Trigger',ntype:'trig',name:t.name,ws:t.workspace,upPlain:t.init_method||t.trigger_type||'schedule/event',upItems:[],downItems:(t.pipelines||[]).map(x=>({k:'pipe',n:x})),data:t});});
  (D.pipelines||[]).forEach(p=>{if(!a.includes(p.workspace))return;const pk=p.workspace+'|'+p.name;const trigs=L.pipeTrigs[pk]||[],parents=L.calledBy[pk]||[],kids=L.callsPipe[pk]||[],lv=L.runsLeaf[pk]||[];
-  const up=[...trigs.map(x=>'\u23f0'+x),...parents.map(x=>'\u25b7'+x)].join(', ')||'\u2014 (no trigger/parent)';
+  const upItems=[...trigs.map(x=>({k:'trig',n:x})),...parents.map(x=>({k:'pipe',n:x}))];
   const seen={},lvd=lv.filter(l=>{const k=l.type+l.name;if(seen[k])return false;seen[k]=1;return true;});
-  const down=[...kids.map(x=>'\u25b7'+x),...lvd.map(l=>(l.type==='nb'?'\U0001F4D3':'\U0001F500')+l.name)].join(', ')||'\u2014';
-  rows.push({type:'Pipeline',ntype:'pipe',name:p.name,ws:p.workspace,up,down,data:p});});
+  const downItems=[...kids.map(x=>({k:'pipe',n:x})),...lvd.map(l=>({k:l.type,n:l.name}))];
+  mk({type:'Pipeline',ntype:'pipe',name:p.name,ws:p.workspace,upItems,upEmpty:'\u2014 (no trigger/parent)',downItems,data:p});});
  const leafRow=(nn,tp,label)=>{const pipes=L.leafPipes[nn.workspace+'|'+tp+'|'+nn.name]||[];const trigs=new Set();pipes.forEach(pn=>(L.pipeTrigs[nn.workspace+'|'+pn]||[]).forEach(t=>trigs.add(t)));
-  const up=[...[...trigs].map(x=>'\u23f0'+x),...pipes.map(x=>'\u25b7'+x)].join(', ')||'\u2014 (orphan \u2014 no pipeline)';rows.push({type:label,ntype:tp,name:nn.name,ws:nn.workspace,up,down:'\u2014',data:nn});};
+  const upItems=[...[...trigs].map(x=>({k:'trig',n:x})),...pipes.map(x=>({k:'pipe',n:x}))];mk({type:label,ntype:tp,name:nn.name,ws:nn.workspace,upItems,upEmpty:'\u2014 (orphan \u2014 no pipeline)',downItems:[],data:nn});};
  (D.notebooks||[]).forEach(nn=>{if(a.includes(nn.workspace))leafRow(nn,'nb','Notebook');});
  (D.dataflows||[]).forEach(dd=>{if(a.includes(dd.workspace))leafRow(dd,'df','Data flow');});
  return rows;}
+function _linCell(items,ws,emptyTxt,plain){if(plain)return esc(plain);if(!items||!items.length)return '<span class="muted">'+esc(emptyTxt||'\u2014')+'</span>';
+ return items.map(it=>'<span class="linref '+it.k+'" data-k="'+it.k+'" data-n="'+att(it.n)+'" data-w="'+att(ws)+'" title="'+att(it.n)+' \u2014 click for details">'+_LICON[it.k]+esc(it.n)+'</span>').join(' ');}
+function linOpen(k,n,ws){const map={trig:'triggers',pipe:'pipelines',nb:'notebooks',df:'dataflows'};const d=(D[map[k]]||[]).find(x=>x.name===n&&x.workspace===ws);trigDetail({type:k,label:n,ws,data:d||{name:n,workspace:ws}});}
 function lineageView(){_linRows=lineageRows();renderLineage();}
 function setLinType(btn){linType=btn.getAttribute('data-lt');document.querySelectorAll('.lchip').forEach(c=>c.classList.toggle('active',c===btn));renderLineage();}
 function renderLineage(){const tbody=document.getElementById('lin_body');if(!tbody)return;const qEl=document.getElementById('lin_q');const q=(qEl?qEl.value:'').toLowerCase();
- let rows=_linRows;if(linType!=='All')rows=rows.filter(r=>r.type===linType);if(q)rows=rows.filter(r=>(r.name+' '+r.up+' '+r.down+' '+r.ws).toLowerCase().includes(q));
+ let rows=_linRows;if(linType!=='All')rows=rows.filter(r=>r.type===linType);if(q)rows=rows.filter(r=>r._s.includes(q));
  _linFiltered=rows;const cnt=document.getElementById('lin_count');if(cnt)cnt.textContent=rows.length+' item(s)'+(rows.length>600?' (showing first 600)':'');
- tbody.innerHTML=rows.slice(0,600).map((r,i)=>'<tr data-li="'+i+'" style="cursor:pointer"><td><span class="pill '+r.ntype+'">'+esc(r.type)+'</span></td><td><b>'+esc(r.name)+'</b></td><td>'+esc(r.ws)+'</td><td>'+esc(r.up)+'</td><td>'+esc(r.down)+'</td></tr>').join('');
- tbody.querySelectorAll('[data-li]').forEach(tr=>tr.onclick=()=>{const r=_linFiltered[+tr.getAttribute('data-li')];trigDetail({type:r.ntype,label:r.name,ws:r.ws,data:r.data});});}
+ tbody.innerHTML=rows.slice(0,600).map((r,i)=>'<tr data-li="'+i+'"><td><span class="pill '+r.ntype+'">'+esc(r.type)+'</span></td><td class="lin-name" title="'+att(r.name)+' \u2014 click for details">'+esc(r.name)+'</td><td>'+esc(r.ws)+'</td><td>'+_linCell(r.upItems,r.ws,r.upEmpty,r.upPlain)+'</td><td>'+_linCell(r.downItems,r.ws,'\u2014')+'</td></tr>').join('');
+ tbody.querySelectorAll('.lin-name').forEach(td=>td.onclick=()=>{const r=_linFiltered[+td.parentNode.getAttribute('data-li')];trigDetail({type:r.ntype,label:r.name,ws:r.ws,data:r.data});});
+ tbody.querySelectorAll('.linref').forEach(el=>el.onclick=e=>{e.stopPropagation();linOpen(el.dataset.k,el.dataset.n,el.dataset.w);});}
 function drillGroup(ws,k){const items=(D[k]||[]).filter(r=>r.workspace===ws);let h='<h2>'+esc(ws)+' — '+k.replace(/_/g,' ')+'</h2><table>';if(items.length){const cols=Object.keys(items[0]).slice(0,4);h+='<tr>'+cols.map(c=>'<th>'+esc(c)+'</th>').join('')+'</tr>';items.slice(0,80).forEach(it=>h+='<tr>'+cols.map(c=>'<td>'+esc(it[c])+'</td>').join('')+'</tr>');}h+='</table>';document.getElementById('dc').innerHTML=h;document.getElementById('drawer').classList.add('open');document.getElementById('ov').classList.add('open');}
 function att(v){return esc(v).replace(/"/g,'&quot;');}
 function trim(s,n){s=''+(s==null?'':s);return s.length>n?s.slice(0,n-1)+'\u2026':s;}
