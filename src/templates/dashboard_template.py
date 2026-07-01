@@ -270,9 +270,11 @@ _TEMPLATE = """<!DOCTYPE html>
  .ov{position:fixed;inset:0;background:rgba(0,0,0,.25);display:none;z-index:40}.ov.open{display:block}
  .flowbox{overflow:auto;border:1px solid #e2e8f0;border-radius:6px;padding:.5rem;background:#fafcff;max-height:300px}
  .xbtn{font-size:.72rem;padding:2px 9px;margin-left:.5rem;cursor:pointer;border:1px solid #1F4E78;background:#1F4E78;color:#fff;border-radius:4px}
- .fs{position:fixed;inset:0;background:#fff;z-index:60;display:none;flex-direction:column}.fs.open{display:flex}
+ .fs{position:fixed;inset:0;background:#fff;z-index:100;display:none;flex-direction:column}.fs.open{display:flex}
  .fsbar{background:#1F4E78;color:#fff;padding:.7rem 1.2rem;display:flex;justify-content:space-between;align-items:center}
  .fsbar .close{color:#fff;float:none}.fsbody{flex:1;overflow:auto;padding:1.5rem;background:#f5f7fa}
+ .fsclose{display:inline-flex;align-items:center;gap:.35rem;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.55);color:#fff;padding:.35rem .8rem;border-radius:6px;cursor:pointer;font-size:.85rem;font-weight:600}
+ .fsclose:hover{background:rgba(255,255,255,.3)}
  .flegend{display:flex;flex-wrap:wrap;gap:.6rem;font-size:.75rem;margin:.4rem 0}.flegend span{display:inline-flex;align-items:center;gap:.3rem}.flegend i{width:12px;height:12px;border-radius:3px;display:inline-block}
  .code{background:#0d1b2a;color:#cfe;padding:.8rem;border-radius:6px;max-height:340px;overflow:auto;font-size:.78rem;white-space:pre-wrap;word-break:break-word;margin:.3rem 0}
  .muted{color:#7a8aa0;font-size:.82rem}
@@ -307,7 +309,7 @@ _TEMPLATE = """<!DOCTYPE html>
 {body}
 <div class="ov" id="ov"></div>
 <div class="drawer" id="drawer"><span class="close" id="dx">×</span><div id="dc"></div></div>
-<div class="fs" id="fs"><div class="fsbar"><strong id="fsTitle"></strong><span class="close" id="fx">×</span></div><div class="fsbody" id="fsBody"></div></div>
+<div class="fs" id="fs"><div class="fsbar"><strong id="fsTitle"></strong><button class="fsclose" id="fx">← Close</button></div><div class="fsbody" id="fsBody"></div></div>
 <script>
 const D={data};
 function active(){return [...document.querySelectorAll('.wsf:checked')].map(c=>c.value);}
@@ -354,6 +356,7 @@ function detail(rowjson,ws){let r={};try{r=JSON.parse(rowjson);}catch(e){}
 function closeD(){document.getElementById('drawer').classList.remove('open');document.getElementById('ov').classList.remove('open');}
 document.getElementById('dx').onclick=closeD;document.getElementById('ov').onclick=closeD;
 document.getElementById('fx').onclick=()=>document.getElementById('fs').classList.remove('open');
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){const fs=document.getElementById('fs');if(fs&&fs.classList.contains('open')){fs.classList.remove('open');return;}closeD();}});
 (function(){const rb=document.getElementById('revOrphanBtn');if(rb)rb.onclick=()=>{showRevOrphans=!showRevOrphans;rb.textContent=showRevOrphans?'Hide unlinked':'Show unlinked';revSpider();};})();
 document.querySelectorAll('tr[data-ws]').forEach(tr=>tr.onclick=()=>{detail(tr.dataset.row||'{}',tr.dataset.ws);});
 document.querySelectorAll('#pipelineops tr[data-ws]').forEach(tr=>{tr.onclick=()=>{let r={};try{r=JSON.parse(tr.dataset.row||'{}');}catch(e){}if(!r.pipeline)return;poPipeline=(poPipeline&&poPipeline.pipeline===r.pipeline&&poPipeline.workspace===r.workspace)?null:{pipeline:r.pipeline,workspace:r.workspace};pipelineOps();};});
