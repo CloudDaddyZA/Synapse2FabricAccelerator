@@ -33,6 +33,9 @@ def test_dashboard(seeded):
     DashboardAgent(seeded).run()
     assert (seeded.subdir("dashboard") / "index.html").exists()
     assert (seeded.subdir("dashboard") / "data" / "dashboard.json").exists()
+    html = (seeded.subdir("dashboard") / "index.html").read_text(encoding="utf-8")
+    assert 'data-view="migrate"' in html
+    assert "Migration Assistant" in html
 
 
 def test_optimization(seeded):

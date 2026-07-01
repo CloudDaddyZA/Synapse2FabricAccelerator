@@ -1,8 +1,9 @@
 """Offline static HTML dashboard renderer with bundled Chart.js fallback.
 
 Renders a multi-view migration report — Overview, Admin, Data Engineering,
-Data Warehousing, Data Integration — sharing one workspace checkbox filter
-that scopes every table and KPI. Self-contained; charts degrade gracefully.
+Data Warehousing, Data Integration, Fabric Readiness, and a Deploy to Fabric
+view that surfaces the FDFMA hand-off pack — sharing one workspace checkbox
+filter that scopes every table and KPI. Self-contained; charts degrade gracefully.
 """
 from __future__ import annotations
 
@@ -17,6 +18,7 @@ _VIEWS = [
     ("warehouse", "Data Warehousing"),
     ("integration", "Data Integration"),
     ("fabready", "Fabric Readiness"),
+    ("migrate", "Deploy to Fabric"),
     ("pipelineops", "Pipeline Ops"),
     ("spider", "Workspace Diagram"),
     ("trigspider", "Trigger Dependency Diagram"),
@@ -43,6 +45,134 @@ def table(title: str, rows: list[dict[str, Any]], cols: list[str]) -> str:
 
 def kpi(label: str, kind: str) -> str:
     return f'<div class="card"><div class="kpi" data-count="{kind}">0</div>{html.escape(label)}</div>'
+
+
+_FDFMA_URL = "https://github.com/microsoft/fabric-toolbox/tree/main/tools/FabricDataFactoryMigrationAssistant"
+_AUTO_LABELS = [("pipelines", "Pipelines"), ("triggers", "Triggers"),
+                ("linkedservices", "Linked services"), ("datasets", "Datasets")]
+_MANUAL_LABELS = [("notebooks", "Notebooks"), ("dataflows", "Data flows")]
+
+
+def _fdfma_chips(counts: dict[str, Any], labels: list[tuple[str, str]], color: str) -> str:
+    chips = []
+    for key, label in labels:
+        n = int(counts.get(key, 0) or 0)
+        if n:
+            chips.append(
+                f'<span style="display:inline-block;background:{color};color:#fff;border-radius:12px;'
+                f'padding:1px 9px;margin:2px 4px 2px 0;font-size:.76rem;font-weight:600">'
+                f'{n} {html.escape(label)}</span>')
+    return "".join(chips) or '<span class="muted">none</span>'
+
+
+def _fdfma_view(data: dict[str, Any]) -> str:
+    f = data.get("fdfma") or {}
+    tool = html.escape(f.get("tool", "Fabric Data Factory Migration Assistant"))
+    url = html.escape(f.get("tool_url", _FDFMA_URL))
+    if not f:
+        return ('<div class="grid"><div class="card" style="grid-column:1/-1">'
+                '<h3>Deploy to Microsoft Fabric</h3>'
+                '<p class="muted">Run the <b>migration</b> stage to generate the Fabric Data Factory '
+                'Migration Assistant hand-off pack, then reload this dashboard.</p></div></div>')
+
+    totals = f.get("totals", {})
+    raw_ok = bool(f.get("raw_definitions_available"))
+    workspaces = f.get("workspaces", [])
+    tiers = f.get("support_tiers", {})
+
+    # Header CTA card.
+    if raw_ok:
+        raw_note = ('<p style="margin:.4rem 0 0;color:#107c10;font-weight:600">'
+                    '\u2714 Per-workspace ARM templates generated \u2014 ready to upload.</p>')
+    else:
+        raw_note = ('<p style="margin:.4rem 0 0;color:#b06a00;font-weight:600">'
+                    '\u26a0 ARM templates not yet generated. Run a live <code>inventory</code> (to capture '
+                    'raw artifact definitions) then <code>migrate</code>, or export the ARM template from '
+                    'Synapse Studio \u2192 Manage \u2192 ARM template.</p>')
+    header = (
+        '<div class="card" style="grid-column:1/-1">'
+        f'<h3>Deploy to Microsoft Fabric with the {tool}</h3>'
+        '<p>The assessed pipelines, triggers, linked services and datasets are packaged as Synapse ARM '
+        'templates ready for one-click deployment via Microsoft\u2019s browser-based Migration Assistant. '
+        'Notebooks and data flows are rebuilt manually (data flows become Dataflow Gen2).</p>'
+        f'<p style="margin:.6rem 0"><a href="{url}" target="_blank" rel="noopener" '
+        'style="display:inline-flex;align-items:center;gap:.4rem;background:#1565C0;color:#fff;'
+        'text-decoration:none;padding:.55rem 1.1rem;border-radius:6px;font-weight:600;font-size:.9rem">'
+        '\u2197 Open the Migration Assistant</a></p>'
+        '<div style="display:flex;gap:2.5rem;flex-wrap:wrap;margin-top:.4rem">'
+        f'<div><div class="kpi" style="color:#107c10">{int(totals.get("auto", 0))}</div>Auto-migratable</div>'
+        f'<div><div class="kpi" style="color:#b06a00">{int(totals.get("manual", 0))}</div>Manual rebuild</div>'
+        '</div>' + raw_note +
+        '<p class="muted" style="margin:.5rem 0 0">Security note: linked-service definitions may reference '
+        'secrets. Synapse returns Key Vault references / secure placeholders, not plaintext \u2014 review each '
+        'ARM template before uploading.</p></div>')
+
+    # Support-tier legend.
+    tier_rows = []
+    for kind, meta in tiers.items():
+        tier = html.escape(str(meta.get("tier", "")))
+        note = html.escape(str(meta.get("note", "")))
+        color = "#107c10" if meta.get("tier") == "auto" else "#b06a00"
+        tier_rows.append(
+            f'<tr><td>{html.escape(kind)}</td>'
+            f'<td><span style="color:{color};font-weight:700">{tier}</span></td>'
+            f'<td>{note}</td></tr>')
+    legend = ('<div class="card" style="grid-column:1/-1"><h3>Artifact support tiers</h3>'
+              '<table><thead><tr><th>Artifact type</th><th>FDFMA tier</th><th>Handling</th></tr></thead>'
+              f'<tbody>{"".join(tier_rows)}</tbody></table></div>')
+
+    # Per-workspace cards.
+    cards = []
+    for ws in workspaces:
+        name = html.escape(str(ws.get("workspace", "")))
+        auto = ws.get("auto_migratable", {})
+        manual = ws.get("manual", {})
+        auto_total = sum(int(v or 0) for v in auto.values())
+        manual_total = sum(int(v or 0) for v in manual.values())
+        if auto_total == 0 and manual_total == 0:
+            continue
+        arm = ws.get("arm_template")
+        if arm:
+            arm_line = ('ARM template: <code>output/migration/migration_assistant/'
+                        f'{html.escape(str(arm))}</code>')
+            step_upload = f'Upload <code>{html.escape(str(arm))}</code> and profile the artifacts.'
+        else:
+            arm_line = ('<span style="color:#b06a00">ARM template not generated \u2014 run a live '
+                        '<code>inventory</code> + <code>migrate</code>, or export from Synapse Studio.</span>')
+            step_upload = 'Upload the exported Synapse/ADF ARM template and profile the artifacts.'
+        nb = int(manual.get("notebooks", 0) or 0)
+        dfc = int(manual.get("dataflows", 0) or 0)
+        manual_step = (f'Rebuild manually: {nb} notebook(s) as Fabric Notebooks, '
+                       f'{dfc} data flow(s) as Dataflow Gen2.') if (nb or dfc) else None
+        steps = [
+            f'Open the <a href="{url}" target="_blank" rel="noopener">Migration Assistant</a>.',
+            step_upload,
+            'Sign in and select the target Fabric workspace.',
+            'Map each linked service to a Fabric connection in the connection wizard.',
+            'Review the mapping, then deploy pipelines, triggers (disabled) and datasets.',
+        ]
+        if manual_step:
+            steps.append(manual_step)
+        steps_html = "".join(f'<li style="margin:.2rem 0">{s}</li>' for s in steps)
+        cards.append(
+            f'<div class="card fdfma-ws" data-ws="{name}">'
+            f'<h3>{name}</h3>'
+            f'<p style="margin:.1rem 0 .4rem;font-size:.82rem">{arm_line}</p>'
+            '<p style="margin:.2rem 0 .1rem;font-size:.78rem;color:#555;font-weight:600">'
+            'Auto-migratable</p>'
+            f'<div>{_fdfma_chips(auto, _AUTO_LABELS, "#107c10")}</div>'
+            '<p style="margin:.5rem 0 .1rem;font-size:.78rem;color:#555;font-weight:600">'
+            'Manual rebuild</p>'
+            f'<div>{_fdfma_chips(manual, _MANUAL_LABELS, "#b06a00")}</div>'
+            '<p style="margin:.6rem 0 .1rem;font-size:.78rem;color:#555;font-weight:600">Upload steps</p>'
+            f'<ol style="margin:.2rem 0 0 1.1rem;padding:0;font-size:.82rem">{steps_html}</ol>'
+            '</div>')
+    cards_html = "".join(cards) or (
+        '<div class="card" style="grid-column:1/-1"><p class="muted">No migratable artifacts found '
+        'for the accessible workspaces.</p></div>')
+
+    return f'<div class="grid">{header}{legend}{cards_html}</div>'
+
 
 
 def render_dashboard(data: dict[str, Any]) -> str:
@@ -167,6 +297,7 @@ def render_dashboard(data: dict[str, Any]) -> str:
             + table("Fabric optimization opportunities", data.get("fabric_optimizations", []),
                     ["artifact", "artifact_type", "category", "recommendation", "fabric_feature", "impact"])
             + "</div>",
+        "migrate": _fdfma_view(data),
         "pipelineops": '<div class="grid">'
             '<div class="card"><div class="kpi" id="po_total">0</div>Pipeline Runs</div>'
             '<div class="card"><div class="kpi" id="po_success">0%</div>Success Rate</div>'
@@ -316,6 +447,7 @@ function active(){return [...document.querySelectorAll('.wsf:checked')].map(c=>c
 function updWsCount(){const el=document.getElementById('wsCount');if(el)el.textContent=active().length;}
 (function(){const btn=document.getElementById('wsBtn'),panel=document.getElementById('wsPanel');if(btn)btn.onclick=e=>{e.stopPropagation();panel.classList.toggle('open');};document.addEventListener('click',e=>{if(panel&&panel.classList.contains('open')&&!panel.contains(e.target)&&!btn.contains(e.target))panel.classList.remove('open');});const g=document.getElementById('gear');if(g)g.onclick=()=>window.scrollTo({top:0,behavior:'smooth'});})();
 function sync(){updWsCount();const a=active();document.querySelectorAll('tr[data-ws]').forEach(tr=>{tr.style.display=a.includes(tr.dataset.ws)?'':'none';});
+ document.querySelectorAll('.fdfma-ws[data-ws]').forEach(el=>{el.style.display=a.includes(el.dataset.ws)?'':'none';});
  document.querySelectorAll('.kpi[data-count]').forEach(k=>{const keys=k.dataset.count.split('|');let s=new Set();keys.forEach(key=>(D[key]||[]).forEach(r=>{if(a.includes(r.workspace)||a.includes(r.name))s.add((r.name||'')+key);}));k.textContent=s.size;});if(typeof applyBandFilter==='function')applyBandFilter();}
 function activateView(v){document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.ddi').forEach(x=>x.classList.remove('active'));
  const view=document.getElementById(v);if(view)view.classList.add('active');

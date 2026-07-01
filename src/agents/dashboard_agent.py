@@ -37,6 +37,10 @@ class DashboardAgent(BaseAgent):
         p = self.settings.subdir("assessment") / "fabric_optimizations.json"
         return read_json(p) if p.exists() else []
 
+    def _fdfma(self):
+        p = self.settings.subdir("migration") / "migration_assistant" / "handoff_manifest.json"
+        return read_json(p) if p.exists() else {}
+
     def _run_errors(self):
         p = self.settings.output_dir / "logs" / "inventory_errors.json"
         if not p.exists():
@@ -74,6 +78,7 @@ class DashboardAgent(BaseAgent):
             "pipeline_run_errors": self._run_errors(),
             "migration_complexity": self._complexity(),
             "fabric_optimizations": self._optimizations(),
+            "fdfma": self._fdfma(),
         }
         data["run_summary"] = _run_summary(data["pipeline_runs"], data["pipeline_run_stats"])
         out = self.output_dir
