@@ -18,11 +18,14 @@ _VIEWS = [
     ("integration", "Data Integration"),
     ("fabready", "Fabric Readiness"),
     ("pipelineops", "Pipeline Ops"),
-    ("spider", "Dependency Spider"),
-    ("trigspider", "Trigger Spider"),
-    ("revspider", "Reverse Spider"),
+    ("spider", "Dependency Diagram"),
+    ("trigspider", "Trigger Diagram"),
+    ("revspider", "Reverse Diagram"),
     ("lineage", "Lineage"),
 ]
+
+# Visualization views grouped under the "Diagrams" dropdown in the top nav.
+_DIAGRAM_KEYS = ("spider", "trigspider", "revspider", "lineage")
 
 
 def table(title: str, rows: list[dict[str, Any]], cols: list[str]) -> str:
@@ -43,9 +46,21 @@ def kpi(label: str, kind: str) -> str:
 
 
 def render_dashboard(data: dict[str, Any]) -> str:
+    main_views = [(k, t) for k, t in _VIEWS if k not in _DIAGRAM_KEYS]
+    diagram_views = [(k, t) for k, t in _VIEWS if k in _DIAGRAM_KEYS]
     tabs = "".join(
         f'<button class="tab{" active" if i == 0 else ""}" data-view="{k}">{html.escape(t)}</button>'
-        for i, (k, t) in enumerate(_VIEWS)
+        for i, (k, t) in enumerate(main_views)
+    )
+    menu_items = "".join(
+        f'<button class="ddi" data-view="{k}">{html.escape(t)}</button>'
+        for k, t in diagram_views
+    )
+    tabs += (
+        '<div class="dd" id="diagDd">'
+        '<button class="tab dd-btn" id="diagBtn">Diagrams <span class="ws-caret">\u25be</span></button>'
+        f'<div class="dd-menu" id="diagMenu">{menu_items}</div>'
+        '</div>'
     )
     boxes = "".join(
         f'<label><input type="checkbox" class="wsf" value="{html.escape(w)}" checked> {html.escape(w)}</label>'
@@ -170,11 +185,11 @@ def render_dashboard(data: dict[str, Any]) -> str:
                      "batch_runs", "realtime_runs", "success_rate", "avg_duration_ms", "max_duration_ms", "last_run"])
             + "</div>",
         "spider": '<div class="grid"><div class="card" style="grid-column:1/-1">'
-            '<h3>Workspace Dependency Spider</h3>'
+            '<h3>Workspace Dependency Diagram</h3>'
             '<p>Each workspace radiates to its artifact groups; click a node to inspect. Use the workspace filter above to focus.</p>'
             '<svg id="spiderSvg" width="100%" height="640" viewBox="0 0 1280 640"></svg></div></div>',
         "trigspider": '<div class="grid"><div class="card" style="grid-column:1/-1">'
-            '<h3>Trigger Dependency Spider</h3>'
+            '<h3>Trigger Dependency Diagram</h3>'
             '<p>Follows each trigger to the pipelines it fires, then on to the notebooks and data flows those pipelines run — the schedule/event-driven chains you must re-wire in Fabric. '
             '<span style="color:#a05a2c;font-weight:600">● Trigger</span> → '
             '<span style="color:#c47f00;font-weight:600">● Pipeline</span> → '
@@ -182,8 +197,8 @@ def render_dashboard(data: dict[str, Any]) -> str:
             '<span style="color:#5b8a3a;font-weight:600">● Data flow</span>. Use the workspace filter above to focus.</p>'
             '<svg id="trigSvg" width="100%" height="360" viewBox="0 0 1120 360"></svg></div></div>',
         "revspider": '<div class="grid"><div class="card" style="grid-column:1/-1">'
-            '<h3>Reverse Dependency Spider</h3>'
-            '<p>Traces each notebook and data flow back to the pipeline(s) that run it, then to the trigger(s) that fire those pipelines — the inverse of the Trigger Spider. Artifacts with no pipeline or no trigger are still shown (as orphans). '
+            '<h3>Reverse Dependency Diagram</h3>'
+            '<p>Traces each notebook and data flow back to the pipeline(s) that run it, then to the trigger(s) that fire those pipelines — the inverse of the Trigger Diagram. Artifacts with no pipeline or no trigger are still shown (as orphans). '
             '<span style="color:#107c10;font-weight:600">● Notebook</span> / '
             '<span style="color:#5b8a3a;font-weight:600">● Data flow</span> → '
             '<span style="color:#c47f00;font-weight:600">● Pipeline</span> → '
@@ -219,15 +234,20 @@ _TEMPLATE = """<!DOCTYPE html>
 <title>Synapse to Fabric — Estate Dashboard</title>
 <style>
  body{font-family:Segoe UI,Arial,sans-serif;margin:0;background:#f5f7fa;color:#222}
- header.topbar{display:flex;align-items:center;gap:.7rem;background:linear-gradient(90deg,#1565C0,#1976D2);color:#fff;padding:0 1.2rem;height:56px;box-shadow:0 2px 6px rgba(0,0,0,.18);position:sticky;top:0;z-index:70}
- .brand{display:flex;align-items:center;gap:.55rem;font-weight:600;font-size:1.05rem;white-space:nowrap;flex:none}
+ header.topbar{display:flex;align-items:center;gap:.5rem;background:linear-gradient(90deg,#1565C0,#1976D2);color:#fff;padding:0 1rem;height:56px;box-shadow:0 2px 6px rgba(0,0,0,.18);position:sticky;top:0;z-index:70}
+ .brand{display:flex;align-items:center;gap:.5rem;font-weight:600;font-size:.97rem;white-space:nowrap;flex:none}
  .brand-ico{flex:none}
- header.topbar .tabs{display:flex;align-items:center;gap:.15rem;flex:1 1 auto;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.5) transparent}
- header.topbar .tabs::-webkit-scrollbar{height:5px}
- header.topbar .tabs::-webkit-scrollbar-thumb{background:rgba(255,255,255,.45);border-radius:3px}
- .tab{background:transparent;border:0;color:#e3eefb;padding:.4rem .7rem;border-radius:20px;cursor:pointer;font-size:.86rem;white-space:nowrap;flex:none;transition:background .15s,color .15s}
+ header.topbar .tabs{display:flex;align-items:center;gap:.08rem;margin-left:auto;flex-wrap:nowrap}
+ .tab{background:transparent;border:0;color:#e3eefb;padding:.38rem .52rem;border-radius:20px;cursor:pointer;font-size:.83rem;white-space:nowrap;flex:none;transition:background .15s,color .15s}
  .tab:hover{background:rgba(255,255,255,.16);color:#fff}
  .tab.active{background:#fff;color:#1565C0;font-weight:600}
+ .dd{position:relative;flex:none}
+ .dd-btn{display:inline-flex;align-items:center;gap:.3rem}
+ .dd-menu{position:absolute;right:0;top:calc(100% + 6px);background:#fff;border-radius:10px;box-shadow:0 8px 26px rgba(0,0,0,.25);padding:.4rem;min-width:200px;display:none;flex-direction:column;z-index:80}
+ .dd-menu.open{display:flex}
+ .dd-menu .ddi{background:transparent;border:0;color:#243b53;text-align:left;padding:.5rem .7rem;border-radius:6px;cursor:pointer;font-size:.88rem;white-space:nowrap}
+ .dd-menu .ddi:hover{background:#eef4fb}
+ .dd-menu .ddi.active{background:#1565C0;color:#fff}
  .ws-wrap{position:relative;flex:none}
  .ws-btn{display:inline-flex;align-items:center;gap:.45rem;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.4);color:#fff;padding:.4rem .8rem;border-radius:20px;cursor:pointer;font-size:.88rem;white-space:nowrap}
  .ws-btn:hover{background:rgba(255,255,255,.24)}
@@ -295,7 +315,15 @@ function updWsCount(){const el=document.getElementById('wsCount');if(el)el.textC
 (function(){const btn=document.getElementById('wsBtn'),panel=document.getElementById('wsPanel');if(btn)btn.onclick=e=>{e.stopPropagation();panel.classList.toggle('open');};document.addEventListener('click',e=>{if(panel&&panel.classList.contains('open')&&!panel.contains(e.target)&&!btn.contains(e.target))panel.classList.remove('open');});const g=document.getElementById('gear');if(g)g.onclick=()=>window.scrollTo({top:0,behavior:'smooth'});})();
 function sync(){updWsCount();const a=active();document.querySelectorAll('tr[data-ws]').forEach(tr=>{tr.style.display=a.includes(tr.dataset.ws)?'':'none';});
  document.querySelectorAll('.kpi[data-count]').forEach(k=>{const keys=k.dataset.count.split('|');let s=new Set();keys.forEach(key=>(D[key]||[]).forEach(r=>{if(a.includes(r.workspace)||a.includes(r.name))s.add((r.name||'')+key);}));k.textContent=s.size;});if(typeof applyBandFilter==='function')applyBandFilter();}
-document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.getElementById(b.dataset.view).classList.add('active');if(b.dataset.view==='spider')spider();if(b.dataset.view==='trigspider')trigSpider();if(b.dataset.view==='revspider')revSpider();if(b.dataset.view==='lineage')lineageView();if(b.dataset.view==='pipelineops')pipelineOps();if(b.dataset.view==='overview')overviewCharts();if(b.dataset.view==='fabready')fabReady();});
+function activateView(v){document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.ddi').forEach(x=>x.classList.remove('active'));
+ const view=document.getElementById(v);if(view)view.classList.add('active');
+ const isDiag=['spider','trigspider','revspider','lineage'].includes(v);
+ if(isDiag){const db=document.getElementById('diagBtn');if(db)db.classList.add('active');const di=document.querySelector('.ddi[data-view="'+v+'"]');if(di)di.classList.add('active');}
+ else{const b=document.querySelector('.tab[data-view="'+v+'"]');if(b)b.classList.add('active');}
+ if(v==='spider')spider();if(v==='trigspider')trigSpider();if(v==='revspider')revSpider();if(v==='lineage')lineageView();if(v==='pipelineops')pipelineOps();if(v==='overview')overviewCharts();if(v==='fabready')fabReady();}
+document.querySelectorAll('.tab[data-view]').forEach(b=>b.onclick=()=>activateView(b.dataset.view));
+document.querySelectorAll('.ddi').forEach(b=>b.onclick=()=>{activateView(b.dataset.view);const m=document.getElementById('diagMenu');if(m)m.classList.remove('open');});
+(function(){const db=document.getElementById('diagBtn'),menu=document.getElementById('diagMenu'),dd=document.getElementById('diagDd');if(db)db.onclick=e=>{e.stopPropagation();menu.classList.toggle('open');};document.addEventListener('click',e=>{if(menu&&menu.classList.contains('open')&&dd&&!dd.contains(e.target))menu.classList.remove('open');});})();
 document.querySelectorAll('.wsf').forEach(c=>c.onchange=()=>{sync();pipelineOps();overviewCharts();fabReady();if(document.getElementById('spider')&&document.getElementById('spider').closest('.view').classList.contains('active'))spider();if(document.getElementById('trigspider')&&document.getElementById('trigspider').classList.contains('active'))trigSpider();if(document.getElementById('revspider')&&document.getElementById('revspider').classList.contains('active'))revSpider();if(document.getElementById('lineage')&&document.getElementById('lineage').classList.contains('active'))lineageView();});
 document.querySelectorAll('.teamc, #team_dpw').forEach(i=>i.oninput=recalcTeam);
 const _cp=document.getElementById('team_copilot');if(_cp)_cp.onchange=recalcTeam;
