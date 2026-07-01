@@ -19,7 +19,7 @@ _VIEWS = [
     ("fabready", "Fabric Readiness"),
     ("pipelineops", "Pipeline Ops"),
     ("spider", "Workspace Diagram"),
-    ("trigspider", "Trigger Diagram"),
+    ("trigspider", "Trigger Dependency Diagram"),
     ("revspider", "Dependency Diagram"),
     ("lineage", "Lineage"),
 ]
