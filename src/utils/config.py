@@ -13,7 +13,9 @@ import yaml
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
-DEFAULT_CONFIG_PATH = Path("config/settings.yaml")
+# Anchored to the repository root so it never depends on the process's current
+# working directory (a long-running server can otherwise lose a valid cwd).
+DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "settings.yaml"
 
 
 class Settings(BaseModel):
@@ -65,9 +67,13 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
     path = Path(config_path) if config_path else DEFAULT_CONFIG_PATH
 
     data: dict = {}
-    if path.exists():
-        with path.open("r", encoding="utf-8") as fh:
-            data = yaml.safe_load(fh) or {}
+    try:
+        if path.exists():
+            with path.open("r", encoding="utf-8") as fh:
+                data = yaml.safe_load(fh) or {}
+    except OSError:
+        # Unreadable/transient config (e.g. cwd or drive hiccup) falls back to defaults.
+        data = {}
 
     settings = Settings(**data)
 
