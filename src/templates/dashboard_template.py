@@ -4,7 +4,10 @@ Renders a multi-view migration report — Overview, Admin, Data Engineering,
 Data Warehousing, Data Integration, Pipeline Ops, a grouped **Fabric** dropdown
 (Fabric Readiness, Deploy to Fabric, and Notebook Modernization) and a grouped
 **Diagrams** dropdown — sharing one workspace checkbox filter that scopes every
-table and KPI. Self-contained; charts degrade gracefully.
+table and KPI. The Diagrams group includes a Workspace Diagram, Trigger/Reverse
+dependency diagrams, an **Object Dependency Diagram** (every workspace object and
+its links across triggers, pipelines, notebooks, data flows, datasets, and linked
+services), and a Lineage explorer. Self-contained; charts degrade gracefully.
 """
 from __future__ import annotations
 
@@ -25,11 +28,12 @@ _VIEWS = [
     ("spider", "Workspace Diagram"),
     ("trigspider", "Trigger Dependency Diagram"),
     ("revspider", "Dependency Diagram"),
+    ("objdep", "Object Dependency Diagram"),
     ("lineage", "Lineage"),
 ]
 
 # Visualization views grouped under the "Diagrams" dropdown in the top nav.
-_DIAGRAM_KEYS = ("spider", "trigspider", "revspider", "lineage")
+_DIAGRAM_KEYS = ("spider", "trigspider", "revspider", "objdep", "lineage")
 
 # Fabric migration views grouped under the "Fabric" dropdown in the top nav.
 _FABRIC_KEYS = ("fabready", "migrate", "notebooks")
@@ -426,6 +430,25 @@ def render_dashboard(data: dict[str, Any]) -> str:
             '<span style="color:#a05a2c;font-weight:600">● Trigger</span>. Click any node for details.</p>'
             '<p><button class="xbtn" id="revOrphanBtn">Hide unlinked</button> <span class="muted" id="revNote"></span></p>'
             '<svg id="revSvg" width="100%" height="360" viewBox="0 0 1120 360"></svg></div></div>',
+        "objdep": '<div class="grid"><div class="card" style="grid-column:1/-1">'
+            '<h3>Object Dependency Diagram</h3>'
+            '<p>Every workspace object and how it depends on the others \u2014 triggers fire pipelines; pipelines run notebooks &amp; data flows and reference datasets &amp; linked services; data flows and datasets resolve down to linked services. This is the full connection map you must reproduce in Fabric. '
+            '<span style="color:#a05a2c;font-weight:600">\u25cf Trigger</span> \u2192 '
+            '<span style="color:#c47f00;font-weight:600">\u25cf Pipeline</span> \u2192 '
+            '<span style="color:#107c10;font-weight:600">\u25cf Notebook</span> / '
+            '<span style="color:#5b8a3a;font-weight:600">\u25cf Data flow</span> \u2192 '
+            '<span style="color:#b03060;font-weight:600">\u25cf Dataset</span> \u2192 '
+            '<span style="color:#0b6cad;font-weight:600">\u25cf Linked service</span>. Type to filter by name, or <b>click any node to focus the graph on that item\u2019s dependency chain</b> (click it again to open its details).</p>'
+            '<div class="lin-ctrl"><input id="obj_q" type="search" placeholder="Filter objects by name\u2026" oninput="objDep()">'
+            '<span class="lin-chips">'
+            '<button class="lchip active" data-ot="trig" onclick="setObjType(this)">Triggers</button>'
+            '<button class="lchip active" data-ot="pipe" onclick="setObjType(this)">Pipelines</button>'
+            '<button class="lchip active" data-ot="nb" onclick="setObjType(this)">Notebooks</button>'
+            '<button class="lchip active" data-ot="df" onclick="setObjType(this)">Data flows</button>'
+            '<button class="lchip active" data-ot="ds" onclick="setObjType(this)">Datasets</button>'
+            '<button class="lchip active" data-ot="ls" onclick="setObjType(this)">Linked services</button>'
+            '</span> <button class="xbtn" id="objOrphanBtn">Show unlinked</button> <button class="xbtn" id="objClearBtn" style="display:none">\u2715 Clear focus</button> <span class="muted" id="objNote"></span></div>'
+            '<svg id="objSvg" width="100%" height="360" viewBox="0 0 1280 360"></svg></div></div>',
         "lineage": '<div class="grid"><div class="card" style="grid-column:1/-1">'
             '<h3>Dependency &amp; Lineage Explorer</h3>'
             '<p>Every artifact with its <b>upstream</b> (what triggers or calls it) and <b>downstream</b> (what it runs or fires). Search or filter by type; click a row for full detail. '
@@ -547,12 +570,12 @@ function activateView(v){document.querySelectorAll('.tab').forEach(x=>x.classLis
  const ddi=document.querySelector('.ddi[data-view="'+v+'"]');
  if(ddi){ddi.classList.add('active');const btn=ddi.closest('.dd').querySelector('.dd-btn');if(btn)btn.classList.add('active');}
  else{const b=document.querySelector('.tab[data-view="'+v+'"]');if(b)b.classList.add('active');}
- if(v==='spider')spider();if(v==='trigspider')trigSpider();if(v==='revspider')revSpider();if(v==='lineage')lineageView();if(v==='pipelineops')pipelineOps();if(v==='overview')overviewCharts();if(v==='fabready')fabReady();}
+ if(v==='spider')spider();if(v==='trigspider')trigSpider();if(v==='revspider')revSpider();if(v==='lineage')lineageView();if(v==='pipelineops')pipelineOps();if(v==='overview')overviewCharts();if(v==='fabready')fabReady();if(v==='objdep')objDep();}
 document.querySelectorAll('.tab[data-view]').forEach(b=>b.onclick=()=>activateView(b.dataset.view));
 document.querySelectorAll('.ddi').forEach(b=>b.onclick=()=>{activateView(b.dataset.view);document.querySelectorAll('.dd-menu.open').forEach(m=>m.classList.remove('open'));});
 document.querySelectorAll('.dd').forEach(dd=>{const btn=dd.querySelector('.dd-btn'),menu=dd.querySelector('.dd-menu');if(btn)btn.onclick=e=>{e.stopPropagation();const wasOpen=menu.classList.contains('open');document.querySelectorAll('.dd-menu.open').forEach(m=>m.classList.remove('open'));if(!wasOpen){const r=btn.getBoundingClientRect();menu.style.top=(r.bottom+6)+'px';menu.style.right=(window.innerWidth-r.right)+'px';menu.classList.add('open');}};});
 document.addEventListener('click',e=>{document.querySelectorAll('.dd').forEach(dd=>{const menu=dd.querySelector('.dd-menu');if(menu&&menu.classList.contains('open')&&!dd.contains(e.target))menu.classList.remove('open');});});
-document.querySelectorAll('.wsf').forEach(c=>c.onchange=()=>{sync();pipelineOps();overviewCharts();fabReady();if(document.getElementById('spider')&&document.getElementById('spider').closest('.view').classList.contains('active'))spider();if(document.getElementById('trigspider')&&document.getElementById('trigspider').classList.contains('active'))trigSpider();if(document.getElementById('revspider')&&document.getElementById('revspider').classList.contains('active'))revSpider();if(document.getElementById('lineage')&&document.getElementById('lineage').classList.contains('active'))lineageView();});
+document.querySelectorAll('.wsf').forEach(c=>c.onchange=()=>{sync();pipelineOps();overviewCharts();fabReady();if(document.getElementById('spider')&&document.getElementById('spider').closest('.view').classList.contains('active'))spider();if(document.getElementById('trigspider')&&document.getElementById('trigspider').classList.contains('active'))trigSpider();if(document.getElementById('revspider')&&document.getElementById('revspider').classList.contains('active'))revSpider();if(document.getElementById('lineage')&&document.getElementById('lineage').classList.contains('active'))lineageView();if(document.getElementById('objdep')&&document.getElementById('objdep').classList.contains('active')){objFocus=null;objDep();}});
 document.querySelectorAll('.teamc, #team_dpw').forEach(i=>i.oninput=recalcTeam);
 const _cp=document.getElementById('team_copilot');if(_cp)_cp.onchange=recalcTeam;
 function esc(v){return (''+(v==null?'':v)).replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));}
@@ -672,6 +695,58 @@ function revSpider(){const svg=document.getElementById('revSvg');if(!svg)return;
  const heads='<text x="'+colL+'" y="24" font-size="12" font-weight="bold" fill="#107c10">Notebooks / Data flows</text><text x="'+colP+'" y="24" font-size="12" font-weight="bold" fill="#c47f00">Pipelines</text><text x="'+colT+'" y="24" font-size="12" font-weight="bold" fill="#a05a2c">Triggers</text>';
  svg.setAttribute('viewBox','0 0 '+W+' '+H);svg.setAttribute('height',H);svg.innerHTML=heads+e+n;_revNodes=nodes;
  svg.querySelectorAll('[data-ri]').forEach(g=>g.onclick=()=>trigDetail(_revNodes[+g.getAttribute('data-ri')]));}
+let objTypes={trig:1,pipe:1,nb:1,df:1,ds:1,ls:1},showObjOrphans=false,objFocus=null,_objNodes=[];
+function setObjType(btn){const t=btn.getAttribute('data-ot');objTypes[t]=objTypes[t]?0:1;btn.classList.toggle('active',!!objTypes[t]);objDep();}
+function objDep(){const svg=document.getElementById('objSvg');if(!svg)return;const a=active();
+ const COL={trig:'#a05a2c',pipe:'#c47f00',nb:'#107c10',df:'#5b8a3a',ds:'#b03060',ls:'#0b6cad'};
+ const colOf={trig:0,pipe:1,nb:2,df:3,ds:4,ls:5};const colX=[16,228,440,652,864,1076];
+ const boxW=190,boxH=22,rowH=28,padT=48,CAP=180;
+ const pipeByKey={};(D.pipelines||[]).forEach(p=>{pipeByKey[p.workspace+'|'+p.name]=p;});
+ const nbByKey={};(D.notebooks||[]).forEach(x=>{nbByKey[x.workspace+'|'+x.name]=x;});
+ const dfByKey={};(D.dataflows||[]).forEach(x=>{dfByKey[x.workspace+'|'+x.name]=x;});
+ const dsByKey={};(D.datasets||[]).forEach(x=>{dsByKey[x.workspace+'|'+x.name]=x;});
+ const lsByKey={};(D.linked_services||[]).forEach(x=>{lsByKey[x.workspace+'|'+x.name]=x;});
+ const actIdx={};(D.pipeline_activities||[]).forEach(x=>{(actIdx[x.workspace+'|'+x.pipeline]=actIdx[x.workspace+'|'+x.pipeline]||[]).push(x);});
+ const nodes=[],nidx={},edges=[],eseen={};
+ const getNode=(t,ws,name,data)=>{if(!objTypes[t])return -1;const k=t+'|'+ws+'|'+name;if(nidx[k]!=null)return nidx[k];const i=nodes.length;nidx[k]=i;nodes.push({type:t,ws,label:name,key:k,data:data||{name,workspace:ws},deg:0});return i;};
+ const link=(t1,ws,n1,d1,t2,n2,d2)=>{const i=getNode(t1,ws,n1,d1),j=getNode(t2,ws,n2,d2);if(i<0||j<0)return;const ek=i+'>'+j;if(eseen[ek])return;eseen[ek]=1;edges.push([i,j]);nodes[i].deg++;nodes[j].deg++;};
+ (D.triggers||[]).forEach(t=>{if(!a.includes(t.workspace))return;(t.pipelines||[]).forEach(pn=>link('trig',t.workspace,t.name,t,'pipe',pn,pipeByKey[t.workspace+'|'+pn]));});
+ (D.pipelines||[]).forEach(p=>{if(!a.includes(p.workspace))return;const ws=p.workspace;
+  (actIdx[ws+'|'+p.name]||[]).forEach(x=>{if(x.activity_type==='SynapseNotebook'&&x.target)link('pipe',ws,p.name,p,'nb',x.target,nbByKey[ws+'|'+x.target]);else if(x.activity_type==='ExecuteDataFlow'&&x.target)link('pipe',ws,p.name,p,'df',x.target,dfByKey[ws+'|'+x.target]);});
+  (p.dataset_refs||[]).forEach(dn=>link('pipe',ws,p.name,p,'ds',dn,dsByKey[ws+'|'+dn]));
+  (p.linked_service_refs||[]).forEach(ln=>link('pipe',ws,p.name,p,'ls',ln,lsByKey[ws+'|'+ln]));});
+ (D.dataflows||[]).forEach(d=>{if(!a.includes(d.workspace))return;const ws=d.workspace;
+  (d.dataset_refs||[]).forEach(dn=>link('df',ws,d.name,d,'ds',dn,dsByKey[ws+'|'+dn]));
+  (d.linked_service_refs||[]).forEach(ln=>link('df',ws,d.name,d,'ls',ln,lsByKey[ws+'|'+ln]));});
+ (D.datasets||[]).forEach(d=>{if(!a.includes(d.workspace))return;if(d.linked_service)link('ds',d.workspace,d.name,d,'ls',d.linked_service,lsByKey[d.workspace+'|'+d.linked_service]);});
+ if(showObjOrphans){const addAll=(arr,t)=>{(D[arr]||[]).forEach(o=>{if(a.includes(o.workspace))getNode(t,o.workspace,o.name,o);});};
+  addAll('triggers','trig');addAll('pipelines','pipe');addAll('notebooks','nb');addAll('dataflows','df');addAll('datasets','ds');addAll('linked_services','ls');}
+ const out={},inn={},adj={};edges.forEach(p=>{(out[p[0]]=out[p[0]]||[]).push(p[1]);(inn[p[1]]=inn[p[1]]||[]).push(p[0]);(adj[p[0]]=adj[p[0]]||[]).push(p[1]);(adj[p[1]]=adj[p[1]]||[]).push(p[0]);});
+ if(objFocus!=null&&nidx[objFocus]==null)objFocus=null;
+ const clr=document.getElementById('objClearBtn');if(clr)clr.style.display=objFocus!=null?'':'none';
+ let show,focusLabel='';
+ if(objFocus!=null){const fi=nidx[objFocus];focusLabel=nodes[fi].label;const reach=new Set([fi]);
+  let st=[fi];while(st.length){const c=st.pop();(out[c]||[]).forEach(j=>{if(!reach.has(j)){reach.add(j);st.push(j);}});}
+  st=[fi];while(st.length){const c=st.pop();(inn[c]||[]).forEach(j=>{if(!reach.has(j)){reach.add(j);st.push(j);}});}
+  show=[...reach];}
+ else{show=nodes.map((n,i)=>i);if(!showObjOrphans)show=show.filter(i=>nodes[i].deg>0);}
+ const qEl=document.getElementById('obj_q');const q=(qEl?qEl.value:'').trim().toLowerCase();
+ if(q){const inShow=new Set(show);const match=show.filter(i=>nodes[i].label.toLowerCase().includes(q)||nodes[i].ws.toLowerCase().includes(q));
+  const keep=new Set(match);match.forEach(i=>(adj[i]||[]).forEach(j=>{if(inShow.has(j))keep.add(j);}));show=show.filter(i=>keep.has(i));}
+ const colNodes=[[],[],[],[],[],[]];show.forEach(i=>colNodes[colOf[nodes[i].type]].push(i));
+ let capped=0;colNodes.forEach((arr,ci)=>{arr.sort((x,y)=>nodes[y].deg-nodes[x].deg||nodes[x].label.localeCompare(nodes[y].label));if(arr.length>CAP){capped+=arr.length-CAP;colNodes[ci]=arr.slice(0,CAP);}
+  colNodes[ci].forEach((i,si)=>{nodes[i].x=colX[ci];nodes[i].y=padT+si*rowH;nodes[i].shown=true;});});
+ let shownEdges=0;edges.forEach(p=>{if(nodes[p[0]].shown&&nodes[p[1]].shown)shownEdges++;});
+ const note=document.getElementById('objNote');if(note)note.textContent=(objFocus!=null?'Focused: '+focusLabel+' \u2014 its dependency chain \u00b7 ':'')+show.length+' object(s) \u00b7 '+shownEdges+' link(s)'+(capped?' \u00b7 '+capped+' capped ('+CAP+'/column)':'')+(q?' \u00b7 filter \u201c'+q+'\u201d':'')+(objFocus==null&&!showObjOrphans?' \u00b7 unlinked hidden':'');
+ if(!show.length){svg.setAttribute('viewBox','0 0 1280 90');svg.setAttribute('height',90);svg.innerHTML='<text x="20" y="48" font-size="13" fill="#888">Nothing matches \u2014 clear the name filter/focus, enable object types, toggle unlinked, or widen the workspace filter.</text>';_objNodes=nodes;return;}
+ const maxRows=Math.max(1,...colNodes.map(x=>x.length));const H=Math.max(140,padT+maxRows*rowH+14);
+ let e='';edges.forEach(p=>{const P=nodes[p[0]],C=nodes[p[1]];if(!P.shown||!C.shown)return;const x1=P.x+boxW,y1=P.y+boxH/2,x2=C.x,y2=C.y+boxH/2,mx=(x1+x2)/2;e+='<path d="M'+x1+' '+y1+' C'+mx+' '+y1+' '+mx+' '+y2+' '+x2+' '+y2+'" fill="none" stroke="#cdd6e2" stroke-width="1"/>';});
+ let n='';show.forEach(i=>{const nd=nodes[i];if(!nd.shown)return;const foc=nd.key===objFocus;n+='<g data-oi="'+i+'" style="cursor:pointer"><title>'+esc(nd.label)+(foc?' \u2014 click again to open details':' \u2014 click to focus')+'</title><rect x="'+nd.x+'" y="'+nd.y+'" width="'+boxW+'" height="'+boxH+'" rx="5" fill="'+COL[nd.type]+'" stroke="'+(foc?'#111':'#fff')+'" stroke-width="'+(foc?2.5:1)+'"/><text x="'+(nd.x+8)+'" y="'+(nd.y+boxH/2+3.5)+'" font-size="10" fill="#fff" font-weight="bold" style="pointer-events:none">'+esc(trim(nd.label,28))+'</text></g>';});
+ const HD=['Triggers','Pipelines','Notebooks','Data flows','Datasets','Linked services'],HC=[COL.trig,COL.pipe,COL.nb,COL.df,COL.ds,COL.ls];
+ const heads=HD.map((t,ci)=>'<text x="'+colX[ci]+'" y="26" font-size="11.5" font-weight="bold" fill="'+HC[ci]+'">'+t+'</text>').join('');
+ svg.setAttribute('viewBox','0 0 1280 '+H);svg.setAttribute('height',H);svg.innerHTML=heads+e+n;_objNodes=nodes;
+ svg.querySelectorAll('[data-oi]').forEach(g=>g.onclick=()=>{const nd=_objNodes[+g.getAttribute('data-oi')];if(nd.key===objFocus){if(nd.type==='trig')trigDetail({type:'trig',label:nd.label,ws:nd.ws,data:nd.data});else detail(JSON.stringify(nd.data),nd.ws);}else{objFocus=nd.key;objDep();}});}
+(function(){const ob=document.getElementById('objOrphanBtn');if(ob)ob.onclick=()=>{showObjOrphans=!showObjOrphans;ob.textContent=showObjOrphans?'Hide unlinked':'Show unlinked';objDep();};const cb=document.getElementById('objClearBtn');if(cb)cb.onclick=()=>{objFocus=null;objDep();};})();
 let _linRows=[],_linFiltered=[],linType='All';
 const _LICON={trig:'\u23f0',pipe:'\u25b7',nb:'\U0001F4D3',df:'\U0001F500'};
 function lineageRows(){const L=buildLineage();const a=active();const rows=[];

@@ -38,6 +38,8 @@ def test_dashboard(seeded):
     html = (seeded.subdir("dashboard") / "index.html").read_text(encoding="utf-8")
     assert 'data-view="migrate"' in html
     assert "Migration Assistant" in html
+    assert 'data-view="objdep"' in html
+    assert "Object Dependency Diagram" in html
 
 
 def test_dashboard_notebook_modernization(seeded):
