@@ -76,6 +76,8 @@ class PipelineActivity(BaseModel):
     depends_on_count: int = 0
     depends_on: list[str] = Field(default_factory=list)
     target: str = ""  # referenced notebook / dataflow / child-pipeline name (when applicable)
+    reads: list[str] = Field(default_factory=list)   # input datasets (Copy source, etc.)
+    writes: list[str] = Field(default_factory=list)  # output datasets (Copy sink, etc.)
     nested: bool = False  # captured from inside a container activity (ForEach/If/Until/Switch)
 
 
@@ -88,6 +90,8 @@ class Pipeline(BaseModel):
     has_nested_activities: bool = False
     linked_service_refs: list[str] = Field(default_factory=list)
     dataset_refs: list[str] = Field(default_factory=list)
+    reads: list[str] = Field(default_factory=list)   # datasets/tables the pipeline reads from
+    writes: list[str] = Field(default_factory=list)  # datasets/tables the pipeline writes to
 
 
 class PipelineRun(BaseModel):
@@ -156,6 +160,7 @@ class Dataset(BaseModel):
     workspace: str
     dataset_type: str = ""
     linked_service: str = ""
+    table: str = ""  # physical table / file / path the dataset points at
 
 
 class Dataflow(BaseModel):
@@ -172,6 +177,8 @@ class Dataflow(BaseModel):
     sinks: list[str] = Field(default_factory=list)
     linked_service_refs: list[str] = Field(default_factory=list)
     dataset_refs: list[str] = Field(default_factory=list)
+    source_datasets: list[str] = Field(default_factory=list)  # datasets/tables read (source transforms)
+    sink_datasets: list[str] = Field(default_factory=list)    # datasets/tables written (sink transforms)
     parameter_count: int = 0
     script_line_count: int = 0
     folder: str = ""

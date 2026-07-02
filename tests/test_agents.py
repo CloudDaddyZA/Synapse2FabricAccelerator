@@ -40,6 +40,8 @@ def test_dashboard(seeded):
     assert "Migration Assistant" in html
     assert 'data-view="objdep"' in html
     assert "Object Dependency Diagram" in html
+    assert "Edge colour shows table access" in html
+    assert 'data-view="revspider"' not in html
 
 
 def test_dashboard_notebook_modernization(seeded):

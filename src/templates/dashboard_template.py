@@ -4,10 +4,11 @@ Renders a multi-view migration report — Overview, Admin, Data Engineering,
 Data Warehousing, Data Integration, Pipeline Ops, a grouped **Fabric** dropdown
 (Fabric Readiness, Deploy to Fabric, and Notebook Modernization) and a grouped
 **Diagrams** dropdown — sharing one workspace checkbox filter that scopes every
-table and KPI. The Diagrams group includes a Workspace Diagram, Trigger/Reverse
-dependency diagrams, an **Object Dependency Diagram** (every workspace object and
+table and KPI. The Diagrams group includes a Workspace Diagram, a Trigger
+Dependency Diagram, an **Object Dependency Diagram** (every workspace object and
 its links across triggers, pipelines, notebooks, data flows, datasets, and linked
-services), and a Lineage explorer. Self-contained; charts degrade gracefully.
+services, annotated with the tables each object reads and writes), and a Lineage
+explorer. Self-contained; charts degrade gracefully.
 """
 from __future__ import annotations
 
@@ -27,13 +28,12 @@ _VIEWS = [
     ("pipelineops", "Pipeline Ops"),
     ("spider", "Workspace Diagram"),
     ("trigspider", "Trigger Dependency Diagram"),
-    ("revspider", "Dependency Diagram"),
     ("objdep", "Object Dependency Diagram"),
     ("lineage", "Lineage"),
 ]
 
 # Visualization views grouped under the "Diagrams" dropdown in the top nav.
-_DIAGRAM_KEYS = ("spider", "trigspider", "revspider", "objdep", "lineage")
+_DIAGRAM_KEYS = ("spider", "trigspider", "objdep", "lineage")
 
 # Fabric migration views grouped under the "Fabric" dropdown in the top nav.
 _FABRIC_KEYS = ("fabready", "migrate", "notebooks")
@@ -421,15 +421,6 @@ def render_dashboard(data: dict[str, Any]) -> str:
             '<span style="color:#107c10;font-weight:600">● Notebook</span> / '
             '<span style="color:#5b8a3a;font-weight:600">● Data flow</span>. Use the workspace filter above to focus.</p>'
             '<svg id="trigSvg" width="100%" height="360" viewBox="0 0 1120 360"></svg></div></div>',
-        "revspider": '<div class="grid"><div class="card" style="grid-column:1/-1">'
-            '<h3>Reverse Dependency Diagram</h3>'
-            '<p>Traces each notebook and data flow back to the pipeline(s) that run it, then to the trigger(s) that fire those pipelines — the inverse of the Trigger Diagram. Artifacts with no pipeline or no trigger are still shown (as orphans). '
-            '<span style="color:#107c10;font-weight:600">● Notebook</span> / '
-            '<span style="color:#5b8a3a;font-weight:600">● Data flow</span> → '
-            '<span style="color:#c47f00;font-weight:600">● Pipeline</span> → '
-            '<span style="color:#a05a2c;font-weight:600">● Trigger</span>. Click any node for details.</p>'
-            '<p><button class="xbtn" id="revOrphanBtn">Hide unlinked</button> <span class="muted" id="revNote"></span></p>'
-            '<svg id="revSvg" width="100%" height="360" viewBox="0 0 1120 360"></svg></div></div>',
         "objdep": '<div class="grid"><div class="card" style="grid-column:1/-1">'
             '<h3>Object Dependency Diagram</h3>'
             '<p>Every workspace object and how it depends on the others \u2014 triggers fire pipelines; pipelines run notebooks &amp; data flows and reference datasets &amp; linked services; data flows and datasets resolve down to linked services. This is the full connection map you must reproduce in Fabric. '
@@ -438,7 +429,9 @@ def render_dashboard(data: dict[str, Any]) -> str:
             '<span style="color:#107c10;font-weight:600">\u25cf Notebook</span> / '
             '<span style="color:#5b8a3a;font-weight:600">\u25cf Data flow</span> \u2192 '
             '<span style="color:#b03060;font-weight:600">\u25cf Dataset</span> \u2192 '
-            '<span style="color:#0b6cad;font-weight:600">\u25cf Linked service</span>. Type to filter by name, or <b>click any node to focus the graph on that item\u2019s dependency chain</b> (click it again to open its details).</p>'
+            '<span style="color:#0b6cad;font-weight:600">\u25cf Linked service</span>. Edge colour shows table access: '
+            '<span style="color:#0b8a8a;font-weight:600">\u2014 reads</span> / '
+            '<span style="color:#c0392b;font-weight:600">\u2014 writes</span> (a dataset node carries its physical table/path; each object\u2019s detail drawer lists its Reads &amp; Writes). Type to filter by name, or <b>click any node to focus the graph on that item\u2019s dependency chain</b> (click it again to open its details).</p>'
             '<div class="lin-ctrl"><input id="obj_q" type="search" placeholder="Filter objects by name\u2026" oninput="objDep()">'
             '<span class="lin-chips">'
             '<button class="lchip active" data-ot="trig" onclick="setObjType(this)">Triggers</button>'
@@ -570,19 +563,19 @@ function activateView(v){document.querySelectorAll('.tab').forEach(x=>x.classLis
  const ddi=document.querySelector('.ddi[data-view="'+v+'"]');
  if(ddi){ddi.classList.add('active');const btn=ddi.closest('.dd').querySelector('.dd-btn');if(btn)btn.classList.add('active');}
  else{const b=document.querySelector('.tab[data-view="'+v+'"]');if(b)b.classList.add('active');}
- if(v==='spider')spider();if(v==='trigspider')trigSpider();if(v==='revspider')revSpider();if(v==='lineage')lineageView();if(v==='pipelineops')pipelineOps();if(v==='overview')overviewCharts();if(v==='fabready')fabReady();if(v==='objdep')objDep();}
+ if(v==='spider')spider();if(v==='trigspider')trigSpider();if(v==='lineage')lineageView();if(v==='pipelineops')pipelineOps();if(v==='overview')overviewCharts();if(v==='fabready')fabReady();if(v==='objdep')objDep();}
 document.querySelectorAll('.tab[data-view]').forEach(b=>b.onclick=()=>activateView(b.dataset.view));
 document.querySelectorAll('.ddi').forEach(b=>b.onclick=()=>{activateView(b.dataset.view);document.querySelectorAll('.dd-menu.open').forEach(m=>m.classList.remove('open'));});
 document.querySelectorAll('.dd').forEach(dd=>{const btn=dd.querySelector('.dd-btn'),menu=dd.querySelector('.dd-menu');if(btn)btn.onclick=e=>{e.stopPropagation();const wasOpen=menu.classList.contains('open');document.querySelectorAll('.dd-menu.open').forEach(m=>m.classList.remove('open'));if(!wasOpen){const r=btn.getBoundingClientRect();menu.style.top=(r.bottom+6)+'px';menu.style.right=(window.innerWidth-r.right)+'px';menu.classList.add('open');}};});
 document.addEventListener('click',e=>{document.querySelectorAll('.dd').forEach(dd=>{const menu=dd.querySelector('.dd-menu');if(menu&&menu.classList.contains('open')&&!dd.contains(e.target))menu.classList.remove('open');});});
-document.querySelectorAll('.wsf').forEach(c=>c.onchange=()=>{sync();pipelineOps();overviewCharts();fabReady();if(document.getElementById('spider')&&document.getElementById('spider').closest('.view').classList.contains('active'))spider();if(document.getElementById('trigspider')&&document.getElementById('trigspider').classList.contains('active'))trigSpider();if(document.getElementById('revspider')&&document.getElementById('revspider').classList.contains('active'))revSpider();if(document.getElementById('lineage')&&document.getElementById('lineage').classList.contains('active'))lineageView();if(document.getElementById('objdep')&&document.getElementById('objdep').classList.contains('active')){objFocus=null;objDep();}});
+document.querySelectorAll('.wsf').forEach(c=>c.onchange=()=>{sync();pipelineOps();overviewCharts();fabReady();if(document.getElementById('spider')&&document.getElementById('spider').closest('.view').classList.contains('active'))spider();if(document.getElementById('trigspider')&&document.getElementById('trigspider').classList.contains('active'))trigSpider();if(document.getElementById('lineage')&&document.getElementById('lineage').classList.contains('active'))lineageView();if(document.getElementById('objdep')&&document.getElementById('objdep').classList.contains('active')){objFocus=null;objDep();}});
 document.querySelectorAll('.teamc, #team_dpw').forEach(i=>i.oninput=recalcTeam);
 const _cp=document.getElementById('team_copilot');if(_cp)_cp.onchange=recalcTeam;
 function esc(v){return (''+(v==null?'':v)).replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));}
 function detail(rowjson,ws){let r={};try{r=JSON.parse(rowjson);}catch(e){}
  const isWs=('assessment_status' in r)||(r.name&&r.name===ws&&!('node_size' in r));
  let h='<h2>'+esc(r.name||ws)+'</h2>';
- h+='<table>'+Object.keys(r).filter(k=>k!=='code_preview'&&k!=='factors').map(k=>'<tr><th>'+esc(k)+'</th><td>'+esc(r[k])+'</td></tr>').join('')+'</table>';
+ h+='<table>'+Object.keys(r).filter(k=>k!=='code_preview'&&k!=='factors'&&k!=='reads'&&k!=='writes'&&k!=='source_datasets'&&k!=='sink_datasets').map(k=>'<tr><th>'+esc(k)+'</th><td>'+esc(r[k])+'</td></tr>').join('')+'</table>';
  if(isWs){const lists=['spark_pools','sql_pools','pipelines','notebooks','dataflows','triggers','linked_services','datasets','integration_runtimes'];
   lists.forEach(k=>{const items=(D[k]||[]).filter(x=>x.workspace===ws);if(!items.length)return;h+='<h3>'+k.replace(/_/g,' ')+' ('+items.length+')</h3><table>';const cols=Object.keys(items[0]).slice(0,4);h+='<tr>'+cols.map(c=>'<th>'+esc(c)+'</th>').join('')+'</tr>';items.slice(0,50).forEach(it=>{h+='<tr>'+cols.map(c=>'<td>'+esc(it[c])+'</td>').join('')+'</tr>';});h+='</table>';});}
  const isPipe=('activity_count' in r)&&('activity_types' in r)&&!isWs;
@@ -596,6 +589,11 @@ function detail(rowjson,ws){let r={};try{r=JSON.parse(rowjson);}catch(e){}
   const tt=r.transformation_types||[];if(tt.length){h+='<h4>Transformations</h4><p>'+tt.map(esc).join(', ')+'</p>';}
   if((r.sources||[]).length){h+='<h4>Sources</h4><p>'+r.sources.map(esc).join(', ')+'</p>';}
   if((r.sinks||[]).length){h+='<h4>Sinks</h4><p>'+r.sinks.map(esc).join(', ')+'</p>';}}
+ const rd=(r.reads||[]).concat(r.source_datasets||[]),wr=(r.writes||[]).concat(r.sink_datasets||[]);
+ if(rd.length||wr.length){const dtbl=nm=>{const d=(D.datasets||[]).find(x=>x.workspace===ws&&x.name===nm);return d&&d.table?esc(nm)+' <span class="muted">\u2192 '+esc(d.table)+'</span>':esc(nm);};
+  h+='<h3>Tables read &amp; written</h3><p class="muted">Datasets this object consumes (read) or produces (write), resolved to their physical table/path where captured.</p>';
+  if(rd.length)h+='<h4 style="color:#0b8a8a">\u25cf Reads ('+rd.length+')</h4><p>'+rd.map(dtbl).join(', ')+'</p>';
+  if(wr.length)h+='<h4 style="color:#c0392b">\u25cf Writes ('+wr.length+')</h4><p>'+wr.map(dtbl).join(', ')+'</p>';}
  const isMC=('estimated_effort_days' in r)&&('factors' in r);
  if(isMC){const f=r.factors||[];if(f.length){h+='<h3>Complexity drivers</h3><ul class="facts">'+f.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>';}
   const opts=(D.fabric_optimizations||[]).filter(o=>o.artifact===r.artifact&&o.workspace===r.workspace);
@@ -606,7 +604,6 @@ function closeD(){document.getElementById('drawer').classList.remove('open');doc
 document.getElementById('dx').onclick=closeD;document.getElementById('ov').onclick=closeD;
 document.getElementById('fx').onclick=()=>document.getElementById('fs').classList.remove('open');
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){const fs=document.getElementById('fs');if(fs&&fs.classList.contains('open')){fs.classList.remove('open');return;}closeD();}});
-(function(){const rb=document.getElementById('revOrphanBtn');if(rb)rb.onclick=()=>{showRevOrphans=!showRevOrphans;rb.textContent=showRevOrphans?'Hide unlinked':'Show unlinked';revSpider();};})();
 document.querySelectorAll('tr[data-ws]').forEach(tr=>tr.onclick=()=>{detail(tr.dataset.row||'{}',tr.dataset.ws);});
 document.querySelectorAll('#pipelineops tr[data-ws]').forEach(tr=>{tr.onclick=()=>{let r={};try{r=JSON.parse(tr.dataset.row||'{}');}catch(e){}if(!r.pipeline)return;poPipeline=(poPipeline&&poPipeline.pipeline===r.pipeline&&poPipeline.workspace===r.workspace)?null:{pipeline:r.pipeline,workspace:r.workspace};pipelineOps();};});
 const SVGNS='http://www.w3.org/2000/svg';
@@ -671,30 +668,6 @@ function buildLineage(){if(_lineage)return _lineage;
  (D.triggers||[]).forEach(t=>{const ws=t.workspace,reach=new Set(),seen=new Set(),stack=[...(t.pipelines||[])];while(stack.length){const p=stack.pop();if(seen.has(p))continue;seen.add(p);reach.add(p);(callsPipe[ws+'|'+p]||[]).forEach(c=>{if(!seen.has(c))stack.push(c);});}trigReach[ws+'|'+t.name]=reach;reach.forEach(p=>{const pk=ws+'|'+p;(pipeTrigs[pk]=pipeTrigs[pk]||new Set()).add(t.name);});});
  const toArr=o=>{const r={};Object.keys(o).forEach(k=>r[k]=[...o[k]]);return r;};
  _lineage={runsLeaf,callsPipe,calledBy:toArr(calledBy),leafPipes:toArr(leafPipes),pipeByKey,trigByKey,pipeTrigs:toArr(pipeTrigs),trigReach};return _lineage;}
-let showRevOrphans=true,_revNodes=[];
-function revSpider(){const svg=document.getElementById('revSvg');if(!svg)return;const a=active();const L=buildLineage();
- const W=1120,boxW=250,boxH=24,rowH=32,padT=46,colL=40,colP=435,colT=820;const COL={nb:'#107c10',df:'#5b8a3a',pipe:'#c47f00',trig:'#a05a2c'};
- const pipesOf=l=>L.leafPipes[l.ws+'|'+l.type+'|'+l.name]||[];
- let leaves=[];(D.notebooks||[]).forEach(nn=>{if(a.includes(nn.workspace))leaves.push({type:'nb',name:nn.name,ws:nn.workspace,data:nn});});(D.dataflows||[]).forEach(dd=>{if(a.includes(dd.workspace))leaves.push({type:'df',name:dd.name,ws:dd.workspace,data:dd});});
- const total=leaves.length,linked=leaves.filter(l=>pipesOf(l).length).length;
- if(!showRevOrphans)leaves=leaves.filter(l=>pipesOf(l).length);
- leaves.sort((x,y)=>{const lx=pipesOf(x).length?0:1,ly=pipesOf(y).length?0:1;return lx-ly||x.type.localeCompare(y.type)||x.name.localeCompare(y.name);});
- const note=document.getElementById('revNote');if(note)note.textContent=total+' notebook/data-flow node(s) \u00b7 '+linked+' linked to a pipeline \u00b7 '+(total-linked)+' unlinked'+(showRevOrphans?'':' (hidden)');
- if(!leaves.length){svg.setAttribute('viewBox','0 0 '+W+' 90');svg.setAttribute('height',90);svg.innerHTML='<text x="20" y="48" font-size="13" fill="#888">No notebooks or data flows to show for the selected workspaces / toggle.</text>';_revNodes=[];return;}
- const nodes=[],edges=[],pipeIdx={},trigIdx={},pipeYs={},trigYs={};let slot=0;
- leaves.forEach(l=>{const y=padT+slot*rowH;slot++;const li=nodes.length;nodes.push({x:colL,y,label:l.name,type:l.type,ws:l.ws,data:l.data});
-  pipesOf(l).forEach(pn=>{const pk=l.ws+'|'+pn;if(pipeIdx[pk]==null){pipeIdx[pk]=nodes.length;nodes.push({x:colP,y:0,label:pn,type:'pipe',ws:l.ws,data:L.pipeByKey[pk]||{name:pn,workspace:l.ws}});pipeYs[pk]=[];}edges.push([li,pipeIdx[pk]]);pipeYs[pk].push(y);});});
- Object.keys(pipeIdx).forEach(pk=>{const ys=pipeYs[pk];nodes[pipeIdx[pk]].y=ys.reduce((s,v)=>s+v,0)/ys.length;const ws=pk.slice(0,pk.indexOf('|'));
-  (L.pipeTrigs[pk]||[]).forEach(tn=>{const tk=ws+'|'+tn;if(trigIdx[tk]==null){trigIdx[tk]=nodes.length;nodes.push({x:colT,y:0,label:tn,type:'trig',ws,data:L.trigByKey[tk]||{name:tn,workspace:ws}});trigYs[tk]=[];}edges.push([pipeIdx[pk],trigIdx[tk]]);trigYs[tk].push(nodes[pipeIdx[pk]].y);});});
- Object.keys(trigIdx).forEach(tk=>{const ys=trigYs[tk];nodes[trigIdx[tk]].y=ys.reduce((s,v)=>s+v,0)/ys.length;});
- const declut=idxs=>{idxs.sort((i,j)=>nodes[i].y-nodes[j].y);for(let k=1;k<idxs.length;k++){if(nodes[idxs[k]].y<nodes[idxs[k-1]].y+boxH+4)nodes[idxs[k]].y=nodes[idxs[k-1]].y+boxH+4;}};
- declut(Object.values(pipeIdx));declut(Object.values(trigIdx));
- let maxY=padT;nodes.forEach(nd=>{if(nd.y>maxY)maxY=nd.y;});const H=Math.max(120,maxY+boxH+12);
- let e='';edges.forEach(p=>{const P=nodes[p[0]],C=nodes[p[1]];const x1=P.x+boxW,y1=P.y+boxH/2,x2=C.x,y2=C.y+boxH/2,mx=(x1+x2)/2;e+='<path d="M'+x1+' '+y1+' C'+mx+' '+y1+' '+mx+' '+y2+' '+x2+' '+y2+'" fill="none" stroke="#c3cdda" stroke-width="1.2"/>';});
- let n='';nodes.forEach((nd,i)=>{const c=COL[nd.type];n+='<g data-ri="'+i+'" style="cursor:pointer"><title>'+esc(nd.label)+' \u2014 click for details</title><rect x="'+nd.x+'" y="'+nd.y+'" width="'+boxW+'" height="'+boxH+'" rx="5" fill="'+c+'" stroke="#fff" stroke-width="1"/><text x="'+(nd.x+9)+'" y="'+(nd.y+boxH/2+3.5)+'" font-size="10.5" fill="#fff" font-weight="bold" style="pointer-events:none">'+esc(trim(nd.label,33))+'</text></g>';});
- const heads='<text x="'+colL+'" y="24" font-size="12" font-weight="bold" fill="#107c10">Notebooks / Data flows</text><text x="'+colP+'" y="24" font-size="12" font-weight="bold" fill="#c47f00">Pipelines</text><text x="'+colT+'" y="24" font-size="12" font-weight="bold" fill="#a05a2c">Triggers</text>';
- svg.setAttribute('viewBox','0 0 '+W+' '+H);svg.setAttribute('height',H);svg.innerHTML=heads+e+n;_revNodes=nodes;
- svg.querySelectorAll('[data-ri]').forEach(g=>g.onclick=()=>trigDetail(_revNodes[+g.getAttribute('data-ri')]));}
 let objTypes={trig:1,pipe:1,nb:1,df:1,ds:1,ls:1},showObjOrphans=false,objFocus=null,_objNodes=[];
 function setObjType(btn){const t=btn.getAttribute('data-ot');objTypes[t]=objTypes[t]?0:1;btn.classList.toggle('active',!!objTypes[t]);objDep();}
 function objDep(){const svg=document.getElementById('objSvg');if(!svg)return;const a=active();
@@ -709,14 +682,20 @@ function objDep(){const svg=document.getElementById('objSvg');if(!svg)return;con
  const actIdx={};(D.pipeline_activities||[]).forEach(x=>{(actIdx[x.workspace+'|'+x.pipeline]=actIdx[x.workspace+'|'+x.pipeline]||[]).push(x);});
  const nodes=[],nidx={},edges=[],eseen={};
  const getNode=(t,ws,name,data)=>{if(!objTypes[t])return -1;const k=t+'|'+ws+'|'+name;if(nidx[k]!=null)return nidx[k];const i=nodes.length;nidx[k]=i;nodes.push({type:t,ws,label:name,key:k,data:data||{name,workspace:ws},deg:0});return i;};
- const link=(t1,ws,n1,d1,t2,n2,d2)=>{const i=getNode(t1,ws,n1,d1),j=getNode(t2,ws,n2,d2);if(i<0||j<0)return;const ek=i+'>'+j;if(eseen[ek])return;eseen[ek]=1;edges.push([i,j]);nodes[i].deg++;nodes[j].deg++;};
+ const link=(t1,ws,n1,d1,t2,n2,d2,kind)=>{const i=getNode(t1,ws,n1,d1),j=getNode(t2,ws,n2,d2);if(i<0||j<0)return;const ek=i+'>'+j;if(eseen[ek]){if(kind&&eseen[ek].k!==kind)eseen[ek].k='rw';return;}const ed=[i,j,kind||''];eseen[ek]=ed;edges.push(ed);nodes[i].deg++;nodes[j].deg++;};
  (D.triggers||[]).forEach(t=>{if(!a.includes(t.workspace))return;(t.pipelines||[]).forEach(pn=>link('trig',t.workspace,t.name,t,'pipe',pn,pipeByKey[t.workspace+'|'+pn]));});
  (D.pipelines||[]).forEach(p=>{if(!a.includes(p.workspace))return;const ws=p.workspace;
   (actIdx[ws+'|'+p.name]||[]).forEach(x=>{if(x.activity_type==='SynapseNotebook'&&x.target)link('pipe',ws,p.name,p,'nb',x.target,nbByKey[ws+'|'+x.target]);else if(x.activity_type==='ExecuteDataFlow'&&x.target)link('pipe',ws,p.name,p,'df',x.target,dfByKey[ws+'|'+x.target]);});
-  (p.dataset_refs||[]).forEach(dn=>link('pipe',ws,p.name,p,'ds',dn,dsByKey[ws+'|'+dn]));
+  const pRW=(p.reads||[]).length||(p.writes||[]).length;
+  (p.reads||[]).forEach(dn=>link('pipe',ws,p.name,p,'ds',dn,dsByKey[ws+'|'+dn],'r'));
+  (p.writes||[]).forEach(dn=>link('pipe',ws,p.name,p,'ds',dn,dsByKey[ws+'|'+dn],'w'));
+  if(!pRW)(p.dataset_refs||[]).forEach(dn=>link('pipe',ws,p.name,p,'ds',dn,dsByKey[ws+'|'+dn]));
   (p.linked_service_refs||[]).forEach(ln=>link('pipe',ws,p.name,p,'ls',ln,lsByKey[ws+'|'+ln]));});
  (D.dataflows||[]).forEach(d=>{if(!a.includes(d.workspace))return;const ws=d.workspace;
-  (d.dataset_refs||[]).forEach(dn=>link('df',ws,d.name,d,'ds',dn,dsByKey[ws+'|'+dn]));
+  const dRW=(d.source_datasets||[]).length||(d.sink_datasets||[]).length;
+  (d.source_datasets||[]).forEach(dn=>link('df',ws,d.name,d,'ds',dn,dsByKey[ws+'|'+dn],'r'));
+  (d.sink_datasets||[]).forEach(dn=>link('df',ws,d.name,d,'ds',dn,dsByKey[ws+'|'+dn],'w'));
+  if(!dRW)(d.dataset_refs||[]).forEach(dn=>link('df',ws,d.name,d,'ds',dn,dsByKey[ws+'|'+dn]));
   (d.linked_service_refs||[]).forEach(ln=>link('df',ws,d.name,d,'ls',ln,lsByKey[ws+'|'+ln]));});
  (D.datasets||[]).forEach(d=>{if(!a.includes(d.workspace))return;if(d.linked_service)link('ds',d.workspace,d.name,d,'ls',d.linked_service,lsByKey[d.workspace+'|'+d.linked_service]);});
  if(showObjOrphans){const addAll=(arr,t)=>{(D[arr]||[]).forEach(o=>{if(a.includes(o.workspace))getNode(t,o.workspace,o.name,o);});};
@@ -740,8 +719,8 @@ function objDep(){const svg=document.getElementById('objSvg');if(!svg)return;con
  const note=document.getElementById('objNote');if(note)note.textContent=(objFocus!=null?'Focused: '+focusLabel+' \u2014 its dependency chain \u00b7 ':'')+show.length+' object(s) \u00b7 '+shownEdges+' link(s)'+(capped?' \u00b7 '+capped+' capped ('+CAP+'/column)':'')+(q?' \u00b7 filter \u201c'+q+'\u201d':'')+(objFocus==null&&!showObjOrphans?' \u00b7 unlinked hidden':'');
  if(!show.length){svg.setAttribute('viewBox','0 0 1280 90');svg.setAttribute('height',90);svg.innerHTML='<text x="20" y="48" font-size="13" fill="#888">Nothing matches \u2014 clear the name filter/focus, enable object types, toggle unlinked, or widen the workspace filter.</text>';_objNodes=nodes;return;}
  const maxRows=Math.max(1,...colNodes.map(x=>x.length));const H=Math.max(140,padT+maxRows*rowH+14);
- let e='';edges.forEach(p=>{const P=nodes[p[0]],C=nodes[p[1]];if(!P.shown||!C.shown)return;const x1=P.x+boxW,y1=P.y+boxH/2,x2=C.x,y2=C.y+boxH/2,mx=(x1+x2)/2;e+='<path d="M'+x1+' '+y1+' C'+mx+' '+y1+' '+mx+' '+y2+' '+x2+' '+y2+'" fill="none" stroke="#cdd6e2" stroke-width="1"/>';});
- let n='';show.forEach(i=>{const nd=nodes[i];if(!nd.shown)return;const foc=nd.key===objFocus;n+='<g data-oi="'+i+'" style="cursor:pointer"><title>'+esc(nd.label)+(foc?' \u2014 click again to open details':' \u2014 click to focus')+'</title><rect x="'+nd.x+'" y="'+nd.y+'" width="'+boxW+'" height="'+boxH+'" rx="5" fill="'+COL[nd.type]+'" stroke="'+(foc?'#111':'#fff')+'" stroke-width="'+(foc?2.5:1)+'"/><text x="'+(nd.x+8)+'" y="'+(nd.y+boxH/2+3.5)+'" font-size="10" fill="#fff" font-weight="bold" style="pointer-events:none">'+esc(trim(nd.label,28))+'</text></g>';});
+ let e='';edges.forEach(p=>{const P=nodes[p[0]],C=nodes[p[1]];if(!P.shown||!C.shown)return;const x1=P.x+boxW,y1=P.y+boxH/2,x2=C.x,y2=C.y+boxH/2,mx=(x1+x2)/2;const kd=p[2],col=kd==='r'?'#0b8a8a':kd==='w'?'#c0392b':kd==='rw'?'#8a6d0b':'#cdd6e2';e+='<path d="M'+x1+' '+y1+' C'+mx+' '+y1+' '+mx+' '+y2+' '+x2+' '+y2+'" fill="none" stroke="'+col+'" stroke-width="'+(kd?1.5:1)+'"/>';});
+ let n='';show.forEach(i=>{const nd=nodes[i];if(!nd.shown)return;const foc=nd.key===objFocus;const tbl=(nd.type==='ds'&&nd.data&&nd.data.table)?' \u2192 '+nd.data.table:'';n+='<g data-oi="'+i+'" style="cursor:pointer"><title>'+esc(nd.label)+esc(tbl)+(foc?' \u2014 click again to open details':' \u2014 click to focus')+'</title><rect x="'+nd.x+'" y="'+nd.y+'" width="'+boxW+'" height="'+boxH+'" rx="5" fill="'+COL[nd.type]+'" stroke="'+(foc?'#111':'#fff')+'" stroke-width="'+(foc?2.5:1)+'"/><text x="'+(nd.x+8)+'" y="'+(nd.y+boxH/2+3.5)+'" font-size="10" fill="#fff" font-weight="bold" style="pointer-events:none">'+esc(trim(nd.label,28))+'</text></g>';});
  const HD=['Triggers','Pipelines','Notebooks','Data flows','Datasets','Linked services'],HC=[COL.trig,COL.pipe,COL.nb,COL.df,COL.ds,COL.ls];
  const heads=HD.map((t,ci)=>'<text x="'+colX[ci]+'" y="26" font-size="11.5" font-weight="bold" fill="'+HC[ci]+'">'+t+'</text>').join('');
  svg.setAttribute('viewBox','0 0 1280 '+H);svg.setAttribute('height',H);svg.innerHTML=heads+e+n;_objNodes=nodes;

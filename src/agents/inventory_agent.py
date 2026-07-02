@@ -201,9 +201,19 @@ class InventoryAgent(BaseAgent):
                     ls_refs.append(ls)
             # Flatten container activities (ForEach/If/Until/Switch) so notebook and
             # data-flow steps nested inside them are captured, and record what each
-            # activity invokes (notebook / data flow / child pipeline) as its target.
+            # activity invokes (notebook / data flow / child pipeline) as its target
+            # plus the datasets it reads (inputs) and writes (outputs).
+            p_reads, p_writes = [], []
             for a, nested in self._iter_activities(activities):
                 deps = [d.get("activity", "") for d in a.get("dependsOn", []) if d.get("activity")]
+                reads = [i.get("referenceName", "") for i in (a.get("inputs") or [])
+                         if isinstance(i, dict) and i.get("referenceName")]
+                writes = [o.get("referenceName", "") for o in (a.get("outputs") or [])
+                          if isinstance(o, dict) and o.get("referenceName")]
+                p_reads.extend(reads)
+                p_writes.extend(writes)
+                ds_refs.extend(reads)
+                ds_refs.extend(writes)
                 acts.append(PipelineActivity(
                     pipeline=raw.get("name", ""), workspace=ws.name,
                     name=a.get("name", ""), activity_type=a.get("type", ""),
@@ -211,6 +221,7 @@ class InventoryAgent(BaseAgent):
                     depends_on_count=len(a.get("dependsOn", [])),
                     depends_on=deps,
                     target=self._activity_target(a),
+                    reads=reads, writes=writes,
                     nested=nested,
                 ))
             pls.append(Pipeline(
@@ -219,6 +230,7 @@ class InventoryAgent(BaseAgent):
                 parameter_count=len(props.get("parameters", {})),
                 has_nested_activities=any("activities" in a for a in activities),
                 linked_service_refs=sorted(set(ls_refs)), dataset_refs=sorted(set(ds_refs)),
+                reads=sorted(set(p_reads)), writes=sorted(set(p_writes)),
             ))
         return pls, acts
 
@@ -384,8 +396,30 @@ class InventoryAgent(BaseAgent):
             out.append(Dataset(
                 name=raw.get("name", ""), workspace=ws.name, dataset_type=p.get("type", ""),
                 linked_service=p.get("linkedServiceName", {}).get("referenceName", ""),
+                table=self._dataset_table(p),
             ))
         return out
+
+    @staticmethod
+    def _dataset_table(props: dict) -> str:
+        """Best-effort physical table / file path a dataset points at."""
+        tp = props.get("typeProperties", {}) or {}
+        tbl = tp.get("table") or tp.get("tableName")
+        schema = tp.get("schema")
+        if isinstance(tbl, str) and tbl:
+            return f"{schema}.{tbl}" if isinstance(schema, str) and schema else tbl
+        loc = tp.get("location")
+        if isinstance(loc, dict):
+            parts = [loc.get("fileSystem") or loc.get("container") or "",
+                     loc.get("folderPath") or "", loc.get("fileName") or ""]
+            path = "/".join(str(x).strip("/") for x in parts if isinstance(x, str) and x)
+            if path:
+                return path
+        for k in ("folderPath", "fileName", "collectionName", "objectName", "path"):
+            v = tp.get(k)
+            if isinstance(v, str) and v:
+                return v
+        return ""
 
     # Mapping Data Flow transformation verbs detected from the data-flow script.
     _DF_TRANSFORMS = [
@@ -406,14 +440,18 @@ class InventoryAgent(BaseAgent):
             transforms = tp.get("transformations", []) or []
             script = "\n".join(tp.get("scriptLines", []) or [])
             ttypes = sorted({t for t in self._DF_TRANSFORMS if re.search(rf"\b{t}\s*\(", script)})
-            ds_refs, ls_refs = [], []
-            for s in sources + sinks:
-                dref = (s.get("dataset") or {}).get("referenceName")
-                lref = (s.get("linkedService") or {}).get("referenceName")
-                if dref:
-                    ds_refs.append(dref)
-                if lref:
-                    ls_refs.append(lref)
+            ds_refs, ls_refs, src_ds, sink_ds = [], [], [], []
+            for items, bucket in ((sources, src_ds), (sinks, sink_ds)):
+                for s in items:
+                    dref = (s.get("dataset") or {}).get("referenceName")
+                    lref = (s.get("linkedService") or {}).get("referenceName")
+                    if dref:
+                        ds_refs.append(dref)
+                        bucket.append(dref)
+                    elif lref:
+                        bucket.append(lref)
+                    if lref:
+                        ls_refs.append(lref)
             out.append(Dataflow(
                 name=raw.get("name", ""), workspace=ws.name,
                 dataflow_type=p.get("type", ""),
@@ -424,6 +462,8 @@ class InventoryAgent(BaseAgent):
                 sinks=[s.get("name", "") for s in sinks],
                 linked_service_refs=sorted(set(ls_refs)),
                 dataset_refs=sorted(set(ds_refs)),
+                source_datasets=sorted(set(src_ds)),
+                sink_datasets=sorted(set(sink_ds)),
                 parameter_count=len(p.get("parameters", {}) or {}),
                 script_line_count=len(tp.get("scriptLines", []) or []),
                 folder=(p.get("folder") or {}).get("name", ""),
