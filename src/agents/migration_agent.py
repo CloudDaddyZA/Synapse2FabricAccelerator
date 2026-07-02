@@ -10,6 +10,7 @@ from ..exporters.excel_writer import write_workbook
 from ..exporters.json_writer import read_json, write_json
 from ..exporters.markdown_writer import write_markdown
 from ..exporters.migration_assistant import write_migration_assistant_pack
+from ..exporters.notebook_modernizer import write_notebook_modernization
 from ..models.assessment import (
     FabricRecommendation,
     MigrationPlan,
@@ -90,6 +91,8 @@ class MigrationAgent(BaseAgent):
         raw_path = self.settings.subdir("inventory") / "raw_definitions.json"
         raw = read_json(raw_path) if raw_path.exists() else None
         pack = write_migration_assistant_pack(out / "migration_assistant", inv, raw)
+        # Fabric Notebook Modernizer: assess + auto-rewrite notebooks to Fabric.
+        nb_pack = write_notebook_modernization(out / "notebook_modernization", inv, raw)
         self.save_errors("migration_errors.json")
         self.logger.info("Migration planning complete: %d recs", len(plan.recommendations))
         return {
@@ -97,4 +100,5 @@ class MigrationAgent(BaseAgent):
             "waves": len(set(w.wave for w in plan.waves)),
             "fdfma_auto": pack["totals"]["auto"],
             "fdfma_manual": pack["totals"]["manual"],
+            "notebooks_modernized": nb_pack["notebooks"],
         }

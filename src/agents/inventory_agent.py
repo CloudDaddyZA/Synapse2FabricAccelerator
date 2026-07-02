@@ -302,7 +302,11 @@ class InventoryAgent(BaseAgent):
 
     def _notebooks(self, ws, rest) -> list[Notebook]:
         out = []
-        for raw in self._safe(f"notebooks:{ws.name}", rest.notebooks):
+        raw_list = self._safe(f"notebooks:{ws.name}", rest.notebooks)
+        # Retain full notebook cells for the Fabric Notebook Modernizer. Kept out
+        # of the FDFMA ARM template (notebooks are rebuilt, not ARM-deployed).
+        self._stash(ws.name, "notebooks", raw_list)
+        for raw in raw_list:
             props = raw.get("properties", {})
             cells = props.get("cells", [])
             source = "\n".join("".join(c.get("source", [])) for c in cells)

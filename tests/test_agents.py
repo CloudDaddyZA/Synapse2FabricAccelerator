@@ -20,6 +20,8 @@ def test_migration(seeded):
     assert (seeded.subdir("migration") / "synapse_to_fabric_mapping.md").exists()
     assert (seeded.subdir("migration") / "migration_assistant" / "handoff_manifest.json").exists()
     assert r["fdfma_auto"] >= 1
+    assert (seeded.subdir("migration") / "notebook_modernization" / "modernization_manifest.json").exists()
+    assert r["notebooks_modernized"] >= 1
 
 
 def test_reporting(seeded):

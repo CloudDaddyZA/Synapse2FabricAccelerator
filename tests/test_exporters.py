@@ -84,3 +84,63 @@ def test_migration_assistant_pack_no_raw(tmp_path, sample_inventory):
     assert manifest["raw_definitions_available"] is False
     assert not list((tmp_path / "ma2").glob("*.arm.json"))
     assert (tmp_path / "ma2" / "README.md").exists()
+
+
+def test_modernize_source():
+    from src.exporters.notebook_modernizer import modernize_source
+    src = (
+        "import mssparkutils\n"
+        "mssparkutils.fs.mount('abfss://c@a.dfs.core.windows.net/x', '/mnt/x')\n"
+        "df = spark.read.load('abfss://c@a.dfs.core.windows.net/data')\n"
+        "conn = 'AccountKey=AbCdEf0123456789+/=='\n"
+    )
+    result = modernize_source(src)
+    # mssparkutils is auto-renamed to notebookutils.
+    assert "mssparkutils" not in result.source
+    assert "notebookutils" in result.source
+    assert any(a["rule"] == "mssparkutils-to-notebookutils" for a in result.applied)
+    # Manual findings detected and readiness lowered below 100.
+    rules = {m["rule"] for m in result.manual}
+    assert "inline-secret" in rules
+    assert "hardcoded-adls-path" in rules
+    assert "filesystem-mount" in rules
+    assert result.readiness < 100
+    assert result.band in {"Minor changes", "Major changes"}
+
+
+def test_notebook_modernization_pack(tmp_path, sample_inventory):
+    from src.exporters.notebook_modernizer import write_notebook_modernization
+    from src.models.inventory import Inventory
+    inv = Inventory(**sample_inventory)
+    raw = {"synw-demo": {"notebooks": [{
+        "name": "nb1",
+        "properties": {
+            "metadata": {"language_info": {"name": "python"}},
+            "cells": [
+                {"cell_type": "markdown", "source": ["# demo\n"]},
+                {"cell_type": "code", "source": ["import mssparkutils\n", "print('hi')\n"]},
+            ],
+        },
+    }]}}
+    manifest = write_notebook_modernization(tmp_path / "nm", inv, raw)
+    assert manifest["notebooks"] == 1
+    assert manifest["auto_changes_applied"] >= 1
+    assert (tmp_path / "nm" / "modernization_manifest.json").exists()
+    assert (tmp_path / "nm" / "notebook_modernization.csv").exists()
+    assert (tmp_path / "nm" / "README.md").exists()
+    nb_file = tmp_path / "nm" / "synw-demo" / "nb1.ipynb"
+    assert nb_file.exists()
+    text = nb_file.read_text(encoding="utf-8")
+    assert "import notebookutils" in text and "import mssparkutils" not in text
+    assert manifest["reports"][0]["source_fidelity"] == "full"
+
+
+def test_notebook_modernization_pack_no_raw(tmp_path, sample_inventory):
+    from src.exporters.notebook_modernizer import write_notebook_modernization
+    from src.models.inventory import Inventory
+    inv = Inventory(**sample_inventory)
+    manifest = write_notebook_modernization(tmp_path / "nm2", inv, None)
+    assert manifest["notebooks"] == 1
+    assert (tmp_path / "nm2" / "synw-demo" / "nb1.ipynb").exists()
+    assert manifest["reports"][0]["source_fidelity"] == "preview"
+

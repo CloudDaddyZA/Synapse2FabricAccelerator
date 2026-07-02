@@ -49,6 +49,7 @@ It runs read-only against your Synapse environment, produces consultant-ready de
 - **Assessment** with risk/complexity scoring (Low/Medium/High/Critical), per-artifact migration effort estimates, and Fabric readiness analysis.
 - **Migration** mapping to Fabric targets, a phased wave plan, and cutover / validation / decommission checklists.
 - **Fabric Data Factory Migration Assistant (FDFMA) feeder** — emits per-workspace Synapse ARM templates plus an auto/manual support-tier manifest, ready to upload to Microsoft's [FDFMA](https://github.com/microsoft/fabric-toolbox/tree/main/tools/FabricDataFactoryMigrationAssistant) for one-click deployment of pipelines, triggers, linked services, and datasets into Fabric.
+- **Fabric Notebook Modernizer** — assesses every Synapse Spark notebook and emits a Fabric-ready `.ipynb` per notebook: safe rewrites are auto-applied (`mssparkutils` → `notebookutils`) and remaining work (inline secrets → Key Vault, `abfss://` → OneLake/Lakehouse, `synapsesql` → Warehouse/Lakehouse SQL, filesystem mounts → shortcuts, hardcoded Spark configs, Synapse magics) is scored into a Fabric-readiness band and embedded as a checklist in the notebook's first cell.
 - **Reports** — executive, technical, and role-aligned (admin, data engineering, data warehousing, data integration) in Markdown and HTML.
 - **Offline HTML dashboard** — fully self-contained (inline SVG charts, no CDN), with workspace filtering, drill-down drawers, pipeline-flow diagrams (expandable to full screen), pipeline run analytics, a grouped **Diagrams** menu (Workspace, Trigger Dependency, Dependency, and Lineage views), a Fabric Readiness view with a **delivery-team & timeline planner** (role head-counts + GitHub Copilot productivity uplift drive an estimated calendar duration), and a **Deploy to Fabric** view that links straight to the FDFMA with per-workspace ARM templates and upload steps.
 - **Power BI** — a ready-to-open `.pbip` project plus CSV datasets and a model guide.
@@ -247,7 +248,7 @@ Enter head-counts per role and pick a **GitHub Copilot** productivity tier to co
 | `output/discovery/` | subscriptions, resource groups, workspaces, summary |
 | `output/inventory/` | inventory JSON/Excel, artifact index, dependency map, raw artifact definitions |
 | `output/assessment/` | scores, complexity, optimizations, risk register, readiness, findings |
-| `output/migration/` | mapping, recommendations, wave plan, cutover/validation/decommission checklists, FDFMA hand-off pack (`migration_assistant/`) |
+| `output/migration/` | mapping, recommendations, wave plan, cutover/validation/decommission checklists, FDFMA hand-off pack (`migration_assistant/`), Fabric-ready notebooks (`notebook_modernization/`) |
 | `output/reports/` | executive + technical + role reports (MD/HTML) |
 | `output/dashboard/` | offline HTML dashboard |
 | `output/copilot_optimization_pack/` | review prompts + index |

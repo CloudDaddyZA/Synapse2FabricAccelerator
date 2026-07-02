@@ -41,6 +41,8 @@ Maps each source artifact to a Fabric target (`FabricRecommendation`) and builds
 
 Also emits the **Fabric Data Factory Migration Assistant (FDFMA)** hand-off pack under `output/migration/migration_assistant/`: a per-workspace `<workspace>.arm.json` Synapse ARM template (built from `raw_definitions.json`, when present), a `handoff_manifest.json` splitting artifacts into auto-migratable (pipelines, triggers, linked services, datasets) vs. manual (notebooks, data flows) tiers, a `fdfma_scope.csv`, and a `README.md`. Upload the ARM template to [FDFMA](https://github.com/microsoft/fabric-toolbox/tree/main/tools/FabricDataFactoryMigrationAssistant) to deploy the auto-migratable artifacts into Fabric.
 
+Finally runs the **Fabric Notebook Modernizer** into `output/migration/notebook_modernization/`: for each Synapse notebook it auto-applies safe rewrites (`mssparkutils` → `notebookutils`), scores Fabric readiness, and writes a Fabric-ready `<workspace>/<notebook>.ipynb` whose first cell lists the manual actions (secrets → Key Vault, `abfss://` → OneLake, `synapsesql` → Warehouse/Lakehouse SQL, mounts → shortcuts, hardcoded Spark configs, Synapse magics), plus a `modernization_manifest.json`, `notebook_modernization.csv`, and `README.md`. Full cell fidelity requires notebooks in `raw_definitions.json` (captured by a live inventory run); otherwise it falls back to the code preview.
+
 ## 5. Reporting — `reporting_agent.py`
 Generates 13 Markdown + HTML reports from saved JSON:
 
