@@ -41,6 +41,10 @@ class DashboardAgent(BaseAgent):
         p = self.settings.subdir("migration") / "migration_assistant" / "handoff_manifest.json"
         return read_json(p) if p.exists() else {}
 
+    def _modernization(self):
+        p = self.settings.subdir("migration") / "notebook_modernization" / "modernization_manifest.json"
+        return read_json(p) if p.exists() else {}
+
     def _run_errors(self):
         p = self.settings.output_dir / "logs" / "inventory_errors.json"
         if not p.exists():
@@ -79,6 +83,7 @@ class DashboardAgent(BaseAgent):
             "migration_complexity": self._complexity(),
             "fabric_optimizations": self._optimizations(),
             "fdfma": self._fdfma(),
+            "modernization": self._modernization(),
         }
         data["run_summary"] = _run_summary(data["pipeline_runs"], data["pipeline_run_stats"])
         out = self.output_dir

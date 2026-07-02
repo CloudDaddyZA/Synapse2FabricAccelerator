@@ -1,8 +1,9 @@
 """Offline static HTML dashboard renderer with bundled Chart.js fallback.
 
 Renders a multi-view migration report — Overview, Admin, Data Engineering,
-Data Warehousing, Data Integration, Fabric Readiness, and a Deploy to Fabric
-view that surfaces the FDFMA hand-off pack — sharing one workspace checkbox
+Data Warehousing, Data Integration, Fabric Readiness, a Deploy to Fabric view
+that surfaces the FDFMA hand-off pack, and a Notebook Modernization view that
+surfaces the Fabric Notebook Modernizer results — sharing one workspace checkbox
 filter that scopes every table and KPI. Self-contained; charts degrade gracefully.
 """
 from __future__ import annotations
@@ -19,6 +20,7 @@ _VIEWS = [
     ("integration", "Data Integration"),
     ("fabready", "Fabric Readiness"),
     ("migrate", "Deploy to Fabric"),
+    ("notebooks", "Notebook Modernization"),
     ("pipelineops", "Pipeline Ops"),
     ("spider", "Workspace Diagram"),
     ("trigspider", "Trigger Dependency Diagram"),
@@ -174,6 +176,85 @@ def _fdfma_view(data: dict[str, Any]) -> str:
     return f'<div class="grid">{header}{legend}{cards_html}</div>'
 
 
+_BAND_COLORS = {"Fabric-ready": "#107c10", "Minor changes": "#b06a00", "Major changes": "#b00020"}
+
+
+def _modernization_view(data: dict[str, Any]) -> str:
+    m = data.get("modernization") or {}
+    reports = m.get("reports") or []
+    if not m or not reports:
+        return ('<div class="grid"><div class="card" style="grid-column:1/-1">'
+                '<h3>Notebook Modernization</h3>'
+                '<p class="muted">Run the <b>migration</b> stage to generate Fabric-ready notebooks with '
+                'the Notebook Modernizer, then reload this dashboard.</p></div></div>')
+
+    tool = html.escape(m.get("tool", "Fabric Notebook Modernizer"))
+    total = int(m.get("notebooks", 0) or 0)
+    auto_applied = int(m.get("auto_changes_applied", 0) or 0)
+    bands = m.get("readiness_bands", {}) or {}
+
+    # Readiness band chips (ordered best-first).
+    band_order = ["Fabric-ready", "Minor changes", "Major changes"]
+    chips = []
+    for band in band_order:
+        n = int(bands.get(band, 0) or 0)
+        if n:
+            color = _BAND_COLORS.get(band, "#555")
+            chips.append(
+                f'<span style="display:inline-block;background:{color};color:#fff;border-radius:12px;'
+                f'padding:1px 10px;margin:2px 6px 2px 0;font-size:.78rem;font-weight:600">'
+                f'{n} {html.escape(band)}</span>')
+    chips_html = "".join(chips) or '<span class="muted">none</span>'
+
+    preview_only = any(r.get("source_fidelity") == "preview" for r in reports)
+    if preview_only:
+        fidelity_note = ('<p style="margin:.4rem 0 0;color:#b06a00;font-weight:600">'
+                         '\u26a0 Some notebooks used the truncated code preview. Run a live '
+                         '<code>inventory</code> (to capture full notebook cells) then <code>migrate</code> '
+                         'for full-fidelity rewrites.</p>')
+    else:
+        fidelity_note = ('<p style="margin:.4rem 0 0;color:#107c10;font-weight:600">'
+                         '\u2714 Full notebook cells captured \u2014 high-fidelity rewrites.</p>')
+
+    header = (
+        '<div class="card" style="grid-column:1/-1">'
+        f'<h3>Modernize notebooks with the {tool}</h3>'
+        '<p>Each Synapse Spark notebook is assessed and rewritten to a Fabric-ready notebook. Safe changes '
+        'are applied automatically (<code>mssparkutils</code> \u2192 <code>notebookutils</code>); remaining '
+        'work \u2014 inline secrets \u2192 Key Vault, <code>abfss://</code> \u2192 OneLake/Lakehouse, '
+        '<code>synapsesql</code> \u2192 Warehouse/Lakehouse SQL, filesystem mounts \u2192 shortcuts, hardcoded '
+        'Spark configs, Synapse magics \u2014 is scored and embedded as a checklist in each notebook\u2019s '
+        'first cell.</p>'
+        '<div style="display:flex;gap:2.5rem;flex-wrap:wrap;margin:.5rem 0 .3rem">'
+        f'<div><div class="kpi">{total}</div>Notebooks assessed</div>'
+        f'<div><div class="kpi" style="color:#107c10">{auto_applied}</div>Auto-changes applied</div>'
+        '</div>'
+        f'<p style="margin:.3rem 0 .1rem;font-size:.8rem;color:#555;font-weight:600">Fabric readiness</p>'
+        f'<div>{chips_html}</div>'
+        + fidelity_note +
+        '<p class="muted" style="margin:.5rem 0 0">Fabric-ready notebooks: '
+        '<code>output/migration/notebook_modernization/&lt;workspace&gt;/&lt;notebook&gt;.ipynb</code>. '
+        'Import each into a Fabric workspace (Notebook \u2192 Import), attach a Lakehouse, and work through '
+        'the embedded checklist.</p></div>')
+
+    rows = [{
+        "workspace": r.get("workspace"),
+        "notebook": r.get("notebook"),
+        "readiness": r.get("readiness"),
+        "band": r.get("band"),
+        "auto_changes": len(r.get("auto_changes", []) or []),
+        "manual_actions": len(r.get("manual_actions", []) or []),
+        "source_fidelity": r.get("source_fidelity"),
+        "modernized_notebook": r.get("modernized_notebook"),
+    } for r in reports]
+    rows.sort(key=lambda r: (r["readiness"], r["workspace"], r["notebook"]))
+    tbl = table("Per-notebook Fabric readiness", rows,
+                ["workspace", "notebook", "readiness", "band",
+                 "auto_changes", "manual_actions", "source_fidelity"])
+
+    return f'<div class="grid">{header}{tbl}</div>'
+
+
 
 def render_dashboard(data: dict[str, Any]) -> str:
     main_views = [(k, t) for k, t in _VIEWS if k not in _DIAGRAM_KEYS]
@@ -298,6 +379,7 @@ def render_dashboard(data: dict[str, Any]) -> str:
                     ["artifact", "artifact_type", "category", "recommendation", "fabric_feature", "impact"])
             + "</div>",
         "migrate": _fdfma_view(data),
+        "notebooks": _modernization_view(data),
         "pipelineops": '<div class="grid">'
             '<div class="card"><div class="kpi" id="po_total">0</div>Pipeline Runs</div>'
             '<div class="card"><div class="kpi" id="po_success">0%</div>Success Rate</div>'

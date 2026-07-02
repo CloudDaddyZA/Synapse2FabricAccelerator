@@ -40,6 +40,15 @@ def test_dashboard(seeded):
     assert "Migration Assistant" in html
 
 
+def test_dashboard_notebook_modernization(seeded):
+    MigrationAgent(seeded).run()
+    DashboardAgent(seeded).run()
+    html = (seeded.subdir("dashboard") / "index.html").read_text(encoding="utf-8")
+    assert 'data-view="notebooks"' in html
+    assert "Notebook Modernizer" in html
+    assert "Per-notebook Fabric readiness" in html
+
+
 def test_optimization(seeded):
     r = OptimizationAgent(seeded).run()
     assert r["prompts"] >= 3
