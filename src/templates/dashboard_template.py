@@ -441,7 +441,7 @@ def render_dashboard(data: dict[str, Any]) -> str:
             '<button class="lchip active" data-ot="ds" onclick="setObjType(this)">Datasets</button>'
             '<button class="lchip active" data-ot="ls" onclick="setObjType(this)">Linked services</button>'
             '</span> <button class="xbtn" id="objOrphanBtn">Show unlinked</button> <button class="xbtn" id="objClearBtn" style="display:none">\u2715 Clear focus</button> <span class="muted" id="objNote"></span></div>'
-            '<svg id="objSvg" width="100%" height="360" viewBox="0 0 1280 360" preserveAspectRatio="xMinYMin meet"></svg></div></div>',
+            '<svg id="objSvg" width="100%" height="360" viewBox="0 0 1540 360" preserveAspectRatio="xMinYMin meet"></svg></div></div>',
         "lineage": '<div class="grid"><div class="card" style="grid-column:1/-1">'
             '<h3>Dependency &amp; Lineage Explorer</h3>'
             '<p>Every artifact with its <b>upstream</b> (what triggers or calls it) and <b>downstream</b> (what it runs or fires). Search or filter by type; click a row for full detail. '
@@ -672,7 +672,7 @@ let objTypes={trig:1,pipe:1,nb:1,df:1,ds:1,ls:1},showObjOrphans=false,objFocus=n
 function setObjType(btn){const t=btn.getAttribute('data-ot');objTypes[t]=objTypes[t]?0:1;btn.classList.toggle('active',!!objTypes[t]);objDep();}
 function objDep(){const svg=document.getElementById('objSvg');if(!svg)return;const a=active();
  const COL={trig:'#a05a2c',pipe:'#c47f00',nb:'#107c10',df:'#5b8a3a',ds:'#b03060',ls:'#0b6cad'};
- const colOf={trig:0,pipe:1,nb:2,df:3,ds:4,ls:5};const colX=[16,228,440,652,864,1076];
+ const colOf={trig:0,pipe:1,nb:2,df:3,ds:4,ls:5};const colX=[16,280,544,808,1072,1336];
  const boxW=190,boxH=22,rowH=28,padT=48,CAP=180;
  const pipeByKey={};(D.pipelines||[]).forEach(p=>{pipeByKey[p.workspace+'|'+p.name]=p;});
  const nbByKey={};(D.notebooks||[]).forEach(x=>{nbByKey[x.workspace+'|'+x.name]=x;});
@@ -717,13 +717,13 @@ function objDep(){const svg=document.getElementById('objSvg');if(!svg)return;con
   colNodes[ci].forEach((i,si)=>{nodes[i].x=colX[ci];nodes[i].y=padT+si*rowH;nodes[i].shown=true;});});
  let shownEdges=0;edges.forEach(p=>{if(nodes[p[0]].shown&&nodes[p[1]].shown)shownEdges++;});
  const note=document.getElementById('objNote');if(note)note.textContent=(objFocus!=null?'Focused: '+focusLabel+' \u2014 its dependency chain \u00b7 ':'')+show.length+' object(s) \u00b7 '+shownEdges+' link(s)'+(capped?' \u00b7 '+capped+' capped ('+CAP+'/column)':'')+(q?' \u00b7 filter \u201c'+q+'\u201d':'')+(objFocus==null&&!showObjOrphans?' \u00b7 unlinked hidden':'');
- if(!show.length){svg.setAttribute('viewBox','0 0 1280 90');svg.setAttribute('height',90);svg.innerHTML='<text x="20" y="48" font-size="13" fill="#888">Nothing matches \u2014 clear the name filter/focus, enable object types, toggle unlinked, or widen the workspace filter.</text>';_objNodes=nodes;return;}
+ if(!show.length){svg.setAttribute('viewBox','0 0 1540 90');svg.setAttribute('height',90);svg.innerHTML='<text x="20" y="48" font-size="13" fill="#888">Nothing matches \u2014 clear the name filter/focus, enable object types, toggle unlinked, or widen the workspace filter.</text>';_objNodes=nodes;return;}
  const maxRows=Math.max(1,...colNodes.map(x=>x.length));const H=Math.max(140,padT+maxRows*rowH+14);
  let e='';edges.forEach(p=>{const P=nodes[p[0]],C=nodes[p[1]];if(!P.shown||!C.shown)return;const x1=P.x+boxW,y1=P.y+boxH/2,x2=C.x,y2=C.y+boxH/2,mx=(x1+x2)/2;const kd=p[2],col=kd==='r'?'#0b8a8a':kd==='w'?'#c0392b':kd==='rw'?'#8a6d0b':'#cdd6e2';e+='<path d="M'+x1+' '+y1+' C'+mx+' '+y1+' '+mx+' '+y2+' '+x2+' '+y2+'" fill="none" stroke="'+col+'" stroke-width="'+(kd?1.5:1)+'"/>';});
  let n='';show.forEach(i=>{const nd=nodes[i];if(!nd.shown)return;const foc=nd.key===objFocus;const tbl=(nd.type==='ds'&&nd.data&&nd.data.table)?' \u2192 '+nd.data.table:'';n+='<g data-oi="'+i+'" style="cursor:pointer"><title>'+esc(nd.label)+esc(tbl)+(foc?' \u2014 click again to open details':' \u2014 click to focus')+'</title><rect x="'+nd.x+'" y="'+nd.y+'" width="'+boxW+'" height="'+boxH+'" rx="5" fill="'+COL[nd.type]+'" stroke="'+(foc?'#111':'#fff')+'" stroke-width="'+(foc?2.5:1)+'"/><text x="'+(nd.x+8)+'" y="'+(nd.y+boxH/2+3.5)+'" font-size="10" fill="#fff" font-weight="bold" style="pointer-events:none">'+esc(trim(nd.label,28))+'</text></g>';});
  const HD=['Triggers','Pipelines','Notebooks','Data flows','Datasets','Linked services'],HC=[COL.trig,COL.pipe,COL.nb,COL.df,COL.ds,COL.ls];
  const heads=HD.map((t,ci)=>'<text x="'+colX[ci]+'" y="26" font-size="11.5" font-weight="bold" fill="'+HC[ci]+'">'+t+'</text>').join('');
- svg.setAttribute('viewBox','0 0 1280 '+H);svg.setAttribute('height',H);svg.innerHTML=heads+e+n;_objNodes=nodes;
+ svg.setAttribute('viewBox','0 0 1540 '+H);svg.setAttribute('height',H);svg.innerHTML=heads+e+n;_objNodes=nodes;
  svg.querySelectorAll('[data-oi]').forEach(g=>g.onclick=()=>{const nd=_objNodes[+g.getAttribute('data-oi')];if(nd.key===objFocus){if(nd.type==='trig')trigDetail({type:'trig',label:nd.label,ws:nd.ws,data:nd.data});else detail(JSON.stringify(nd.data),nd.ws);}else{objFocus=nd.key;objDep();}});}
 (function(){const ob=document.getElementById('objOrphanBtn');if(ob)ob.onclick=()=>{showObjOrphans=!showObjOrphans;ob.textContent=showObjOrphans?'Hide unlinked':'Show unlinked';objDep();};const cb=document.getElementById('objClearBtn');if(cb)cb.onclick=()=>{objFocus=null;objDep();};})();
 let _linRows=[],_linFiltered=[],linType='All';
