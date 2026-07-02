@@ -412,7 +412,7 @@ def render_dashboard(data: dict[str, Any]) -> str:
         "spider": '<div class="grid"><div class="card" style="grid-column:1/-1">'
             '<h3>Workspace Diagram</h3>'
             '<p>Each workspace radiates to its artifact groups; click a node to inspect. Use the workspace filter above to focus.</p>'
-            '<svg id="spiderSvg" width="100%" height="640" viewBox="0 0 1280 640"></svg></div></div>',
+            '<svg id="spiderSvg" width="100%" height="640" viewBox="0 0 1280 640" preserveAspectRatio="xMinYMin meet"></svg></div></div>',
         "trigspider": '<div class="grid"><div class="card" style="grid-column:1/-1">'
             '<h3>Trigger Dependency Diagram</h3>'
             '<p>Follows each trigger to the pipelines it fires, then on to the notebooks and data flows those pipelines run — the schedule/event-driven chains you must re-wire in Fabric. '
@@ -420,7 +420,7 @@ def render_dashboard(data: dict[str, Any]) -> str:
             '<span style="color:#c47f00;font-weight:600">● Pipeline</span> → '
             '<span style="color:#107c10;font-weight:600">● Notebook</span> / '
             '<span style="color:#5b8a3a;font-weight:600">● Data flow</span>. Use the workspace filter above to focus.</p>'
-            '<svg id="trigSvg" width="100%" height="360" viewBox="0 0 1120 360"></svg></div></div>',
+            '<svg id="trigSvg" width="100%" height="360" viewBox="0 0 1120 360" preserveAspectRatio="xMinYMin meet"></svg></div></div>',
         "objdep": '<div class="grid"><div class="card" style="grid-column:1/-1">'
             '<h3>Object Dependency Diagram</h3>'
             '<p>Every workspace object and how it depends on the others \u2014 triggers fire pipelines; pipelines run notebooks &amp; data flows and reference datasets &amp; linked services; data flows and datasets resolve down to linked services. This is the full connection map you must reproduce in Fabric. '
@@ -441,7 +441,7 @@ def render_dashboard(data: dict[str, Any]) -> str:
             '<button class="lchip active" data-ot="ds" onclick="setObjType(this)">Datasets</button>'
             '<button class="lchip active" data-ot="ls" onclick="setObjType(this)">Linked services</button>'
             '</span> <button class="xbtn" id="objOrphanBtn">Show unlinked</button> <button class="xbtn" id="objClearBtn" style="display:none">\u2715 Clear focus</button> <span class="muted" id="objNote"></span></div>'
-            '<svg id="objSvg" width="100%" height="360" viewBox="0 0 1280 360"></svg></div></div>',
+            '<svg id="objSvg" width="100%" height="360" viewBox="0 0 1280 360" preserveAspectRatio="xMinYMin meet"></svg></div></div>',
         "lineage": '<div class="grid"><div class="card" style="grid-column:1/-1">'
             '<h3>Dependency &amp; Lineage Explorer</h3>'
             '<p>Every artifact with its <b>upstream</b> (what triggers or calls it) and <b>downstream</b> (what it runs or fires). Search or filter by type; click a row for full detail. '
