@@ -1,10 +1,10 @@
 """Offline static HTML dashboard renderer with bundled Chart.js fallback.
 
 Renders a multi-view migration report — Overview, Admin, Data Engineering,
-Data Warehousing, Data Integration, Fabric Readiness, a Deploy to Fabric view
-that surfaces the FDFMA hand-off pack, and a Notebook Modernization view that
-surfaces the Fabric Notebook Modernizer results — sharing one workspace checkbox
-filter that scopes every table and KPI. Self-contained; charts degrade gracefully.
+Data Warehousing, Data Integration, Pipeline Ops, a grouped **Fabric** dropdown
+(Fabric Readiness, Deploy to Fabric, and Notebook Modernization) and a grouped
+**Diagrams** dropdown — sharing one workspace checkbox filter that scopes every
+table and KPI. Self-contained; charts degrade gracefully.
 """
 from __future__ import annotations
 
@@ -30,6 +30,20 @@ _VIEWS = [
 
 # Visualization views grouped under the "Diagrams" dropdown in the top nav.
 _DIAGRAM_KEYS = ("spider", "trigspider", "revspider", "lineage")
+
+# Fabric migration views grouped under the "Fabric" dropdown in the top nav.
+_FABRIC_KEYS = ("fabready", "migrate", "notebooks")
+
+
+def _nav_dropdown(dd_id: str, btn_id: str, menu_id: str, label: str,
+                  views: list[tuple[str, str]]) -> str:
+    """Build a top-nav dropdown grouping a set of views under one button."""
+    items = "".join(
+        f'<button class="ddi" data-view="{k}">{html.escape(t)}</button>' for k, t in views)
+    return (f'<div class="dd" id="{dd_id}">'
+            f'<button class="tab dd-btn" id="{btn_id}">{html.escape(label)} '
+            f'<span class="ws-caret">\u25be</span></button>'
+            f'<div class="dd-menu" id="{menu_id}">{items}</div></div>')
 
 
 def table(title: str, rows: list[dict[str, Any]], cols: list[str]) -> str:
@@ -257,22 +271,16 @@ def _modernization_view(data: dict[str, Any]) -> str:
 
 
 def render_dashboard(data: dict[str, Any]) -> str:
-    main_views = [(k, t) for k, t in _VIEWS if k not in _DIAGRAM_KEYS]
+    grouped = set(_FABRIC_KEYS) | set(_DIAGRAM_KEYS)
+    main_views = [(k, t) for k, t in _VIEWS if k not in grouped]
+    fabric_views = [(k, t) for k, t in _VIEWS if k in _FABRIC_KEYS]
     diagram_views = [(k, t) for k, t in _VIEWS if k in _DIAGRAM_KEYS]
     tabs = "".join(
         f'<button class="tab{" active" if i == 0 else ""}" data-view="{k}">{html.escape(t)}</button>'
         for i, (k, t) in enumerate(main_views)
     )
-    menu_items = "".join(
-        f'<button class="ddi" data-view="{k}">{html.escape(t)}</button>'
-        for k, t in diagram_views
-    )
-    tabs += (
-        '<div class="dd" id="diagDd">'
-        '<button class="tab dd-btn" id="diagBtn">Diagrams <span class="ws-caret">\u25be</span></button>'
-        f'<div class="dd-menu" id="diagMenu">{menu_items}</div>'
-        '</div>'
-    )
+    tabs += _nav_dropdown("fabricDd", "fabricBtn", "fabricMenu", "Fabric", fabric_views)
+    tabs += _nav_dropdown("diagDd", "diagBtn", "diagMenu", "Diagrams", diagram_views)
     boxes = "".join(
         f'<label><input type="checkbox" class="wsf" value="{html.escape(w)}" checked> {html.escape(w)}</label>'
         for w in data.get("workspace_names", [])
@@ -536,13 +544,14 @@ function sync(){updWsCount();const a=active();document.querySelectorAll('tr[data
  document.querySelectorAll('.kpi[data-count]').forEach(k=>{const keys=k.dataset.count.split('|');let s=new Set();keys.forEach(key=>(D[key]||[]).forEach(r=>{if(a.includes(r.workspace)||a.includes(r.name))s.add((r.name||'')+key);}));k.textContent=s.size;});if(typeof applyBandFilter==='function')applyBandFilter();}
 function activateView(v){document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.ddi').forEach(x=>x.classList.remove('active'));
  const view=document.getElementById(v);if(view)view.classList.add('active');
- const isDiag=['spider','trigspider','revspider','lineage'].includes(v);
- if(isDiag){const db=document.getElementById('diagBtn');if(db)db.classList.add('active');const di=document.querySelector('.ddi[data-view="'+v+'"]');if(di)di.classList.add('active');}
+ const ddi=document.querySelector('.ddi[data-view="'+v+'"]');
+ if(ddi){ddi.classList.add('active');const btn=ddi.closest('.dd').querySelector('.dd-btn');if(btn)btn.classList.add('active');}
  else{const b=document.querySelector('.tab[data-view="'+v+'"]');if(b)b.classList.add('active');}
  if(v==='spider')spider();if(v==='trigspider')trigSpider();if(v==='revspider')revSpider();if(v==='lineage')lineageView();if(v==='pipelineops')pipelineOps();if(v==='overview')overviewCharts();if(v==='fabready')fabReady();}
 document.querySelectorAll('.tab[data-view]').forEach(b=>b.onclick=()=>activateView(b.dataset.view));
-document.querySelectorAll('.ddi').forEach(b=>b.onclick=()=>{activateView(b.dataset.view);const m=document.getElementById('diagMenu');if(m)m.classList.remove('open');});
-(function(){const db=document.getElementById('diagBtn'),menu=document.getElementById('diagMenu'),dd=document.getElementById('diagDd');if(db)db.onclick=e=>{e.stopPropagation();menu.classList.toggle('open');};document.addEventListener('click',e=>{if(menu&&menu.classList.contains('open')&&dd&&!dd.contains(e.target))menu.classList.remove('open');});})();
+document.querySelectorAll('.ddi').forEach(b=>b.onclick=()=>{activateView(b.dataset.view);document.querySelectorAll('.dd-menu.open').forEach(m=>m.classList.remove('open'));});
+document.querySelectorAll('.dd').forEach(dd=>{const btn=dd.querySelector('.dd-btn'),menu=dd.querySelector('.dd-menu');if(btn)btn.onclick=e=>{e.stopPropagation();const wasOpen=menu.classList.contains('open');document.querySelectorAll('.dd-menu.open').forEach(m=>m.classList.remove('open'));if(!wasOpen)menu.classList.add('open');};});
+document.addEventListener('click',e=>{document.querySelectorAll('.dd').forEach(dd=>{const menu=dd.querySelector('.dd-menu');if(menu&&menu.classList.contains('open')&&!dd.contains(e.target))menu.classList.remove('open');});});
 document.querySelectorAll('.wsf').forEach(c=>c.onchange=()=>{sync();pipelineOps();overviewCharts();fabReady();if(document.getElementById('spider')&&document.getElementById('spider').closest('.view').classList.contains('active'))spider();if(document.getElementById('trigspider')&&document.getElementById('trigspider').classList.contains('active'))trigSpider();if(document.getElementById('revspider')&&document.getElementById('revspider').classList.contains('active'))revSpider();if(document.getElementById('lineage')&&document.getElementById('lineage').classList.contains('active'))lineageView();});
 document.querySelectorAll('.teamc, #team_dpw').forEach(i=>i.oninput=recalcTeam);
 const _cp=document.getElementById('team_copilot');if(_cp)_cp.onchange=recalcTeam;
