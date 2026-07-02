@@ -465,7 +465,7 @@ _TEMPLATE = """<!DOCTYPE html>
  .tab.active{background:#fff;color:#1565C0;font-weight:600}
  .dd{position:relative;flex:none}
  .dd-btn{display:inline-flex;align-items:center;gap:.3rem}
- .dd-menu{position:absolute;right:0;top:calc(100% + 6px);background:#fff;border-radius:10px;box-shadow:0 8px 26px rgba(0,0,0,.25);padding:.4rem;min-width:200px;display:none;flex-direction:column;z-index:80}
+ .dd-menu{position:fixed;background:#fff;border-radius:10px;box-shadow:0 8px 26px rgba(0,0,0,.25);padding:.4rem;min-width:200px;display:none;flex-direction:column;z-index:80}
  .dd-menu.open{display:flex}
  .dd-menu .ddi{background:transparent;border:0;color:#243b53;text-align:left;padding:.5rem .7rem;border-radius:6px;cursor:pointer;font-size:.88rem;white-space:nowrap}
  .dd-menu .ddi:hover{background:#eef4fb}
@@ -550,7 +550,7 @@ function activateView(v){document.querySelectorAll('.tab').forEach(x=>x.classLis
  if(v==='spider')spider();if(v==='trigspider')trigSpider();if(v==='revspider')revSpider();if(v==='lineage')lineageView();if(v==='pipelineops')pipelineOps();if(v==='overview')overviewCharts();if(v==='fabready')fabReady();}
 document.querySelectorAll('.tab[data-view]').forEach(b=>b.onclick=()=>activateView(b.dataset.view));
 document.querySelectorAll('.ddi').forEach(b=>b.onclick=()=>{activateView(b.dataset.view);document.querySelectorAll('.dd-menu.open').forEach(m=>m.classList.remove('open'));});
-document.querySelectorAll('.dd').forEach(dd=>{const btn=dd.querySelector('.dd-btn'),menu=dd.querySelector('.dd-menu');if(btn)btn.onclick=e=>{e.stopPropagation();const wasOpen=menu.classList.contains('open');document.querySelectorAll('.dd-menu.open').forEach(m=>m.classList.remove('open'));if(!wasOpen)menu.classList.add('open');};});
+document.querySelectorAll('.dd').forEach(dd=>{const btn=dd.querySelector('.dd-btn'),menu=dd.querySelector('.dd-menu');if(btn)btn.onclick=e=>{e.stopPropagation();const wasOpen=menu.classList.contains('open');document.querySelectorAll('.dd-menu.open').forEach(m=>m.classList.remove('open'));if(!wasOpen){const r=btn.getBoundingClientRect();menu.style.top=(r.bottom+6)+'px';menu.style.right=(window.innerWidth-r.right)+'px';menu.classList.add('open');}};});
 document.addEventListener('click',e=>{document.querySelectorAll('.dd').forEach(dd=>{const menu=dd.querySelector('.dd-menu');if(menu&&menu.classList.contains('open')&&!dd.contains(e.target))menu.classList.remove('open');});});
 document.querySelectorAll('.wsf').forEach(c=>c.onchange=()=>{sync();pipelineOps();overviewCharts();fabReady();if(document.getElementById('spider')&&document.getElementById('spider').closest('.view').classList.contains('active'))spider();if(document.getElementById('trigspider')&&document.getElementById('trigspider').classList.contains('active'))trigSpider();if(document.getElementById('revspider')&&document.getElementById('revspider').classList.contains('active'))revSpider();if(document.getElementById('lineage')&&document.getElementById('lineage').classList.contains('active'))lineageView();});
 document.querySelectorAll('.teamc, #team_dpw').forEach(i=>i.oninput=recalcTeam);
