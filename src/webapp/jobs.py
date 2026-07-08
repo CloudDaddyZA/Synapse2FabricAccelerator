@@ -14,6 +14,7 @@ from typing import Any
 from ..agents.assessment_agent import AssessmentAgent
 from ..agents.dashboard_agent import DashboardAgent
 from ..agents.discovery_agent import DiscoveryAgent
+from ..agents.fabric_audit_agent import FabricAuditAgent
 from ..agents.inventory_agent import InventoryAgent
 from ..agents.migration_agent import MigrationAgent
 from ..agents.optimization_agent import OptimizationAgent
@@ -25,11 +26,12 @@ AGENTS: dict[str, Any] = {
     "inventory": InventoryAgent,
     "assess": AssessmentAgent,
     "migrate": MigrationAgent,
+    "fabric-audit": FabricAuditAgent,
     "report": ReportingAgent,
     "dashboard": DashboardAgent,
     "optimize": OptimizationAgent,
 }
-PIPELINE_ORDER = ["discover", "inventory", "assess", "migrate", "report", "dashboard", "optimize"]
+PIPELINE_ORDER = ["discover", "inventory", "assess", "migrate", "fabric-audit", "report", "dashboard", "optimize"]
 
 
 @dataclass
