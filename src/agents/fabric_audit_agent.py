@@ -37,6 +37,10 @@ from .base_agent import BaseAgent
 
 # Synapse Spark node size -> vCores per node (used to size the source workload).
 _NODE_VCORES = {"small": 4, "medium": 8, "large": 16, "xlarge": 32, "xxlarge": 64}
+# Fraction of non-peak Spark pools assumed to run concurrently with the largest.
+_SPARK_CONCURRENCY = 0.3
+# Effective Fabric Spark vCores served per capacity unit (2 base, ~3x burst).
+_SPARK_VCORES_PER_CU = 3
 # Fabric F-SKU capacity-unit ladder.
 _F_SKUS = [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
 # Power BI Premium P-SKU -> approximate Fabric capacity units.
@@ -169,6 +173,7 @@ class FabricAuditAgent(BaseAgent):
     def _demand(self, inv: dict) -> WorkloadDemand:
         ws = inv.get("workspaces", [])
         d = WorkloadDemand(workspaces=len(ws))
+        peak_pool = 0
         for w in ws:
             d.pipelines += len(w.get("pipelines", []))
             d.notebooks += len(w.get("notebooks", []))
@@ -178,14 +183,24 @@ class FabricAuditAgent(BaseAgent):
                 per = _NODE_VCORES.get(str(sp.get("node_size", "")).lower(), 8)
                 nodes = sp.get("max_nodes") if sp.get("autoscale_enabled") else sp.get("node_count")
                 nodes = int(nodes or sp.get("max_nodes") or sp.get("node_count") or 3)
-                d.spark_vcores += per * max(nodes, 1)
+                pool_vcores = per * max(nodes, 1)
+                d.spark_vcores += pool_vcores
+                peak_pool = max(peak_pool, pool_vcores)
             for sq in w.get("sql_pools", []):
                 d.sql_pools += 1
                 if not sq.get("is_serverless"):
                     m = re.search(r"(\d+)", str(sq.get("sku", "")))
                     d.sql_dwu += int(m.group(1)) if m else 0
-        # Fabric provides ~2 base Spark vCores per capacity unit (burst higher).
-        cu_spark = math.ceil(d.spark_vcores / 2) if d.spark_vcores else 0
+        d.spark_peak_pool_vcores = peak_pool
+        # Concurrency-adjusted demand: the largest single pool bounds one job's
+        # parallelism; assume only a fraction of the *other* pools' provisioned
+        # capacity runs concurrently (Synapse pools are provisioned for burst but
+        # rarely all peak at once). This avoids sizing for an unrealistic worst case.
+        concurrent = peak_pool + int(round(_SPARK_CONCURRENCY * (d.spark_vcores - peak_pool)))
+        d.concurrent_spark_vcores = concurrent
+        # Fabric provides ~2 base Spark vCores per CU, burstable ~3x; size on the
+        # effective burst rate so a capacity's autoscale/bursting is accounted for.
+        cu_spark = math.ceil(concurrent / _SPARK_VCORES_PER_CU) if concurrent else 0
         cu_general = 8 if (d.pipelines or d.notebooks or d.dataflows or d.sql_pools) else 0
         required = max(cu_spark, cu_general)
         d.required_capacity_units = required
@@ -249,22 +264,27 @@ class FabricAuditAgent(BaseAgent):
 
         # Sizing
         if demand.required_capacity_units:
+            basis = (f"est. {demand.required_capacity_units} CU ({demand.recommended_sku}); "
+                     f"provisioned Spark {demand.spark_vcores} vCores across {demand.spark_pools} pools, "
+                     f"largest pool {demand.spark_peak_pool_vcores} vCores, concurrency-adjusted "
+                     f"~{demand.concurrent_spark_vcores} vCores")
+            caveat = ("Estimate is from *provisioned* pool maxima, not observed utilisation \u2014 "
+                      "validate against actual Spark usage / the Fabric Capacity Metrics app.")
             if largest_cu >= demand.required_capacity_units:
                 findings.append(CapabilityFinding(
                     category="Capacity", severity="Pass",
                     target=largest.display_name if largest else "",
                     message=(f"Largest active capacity {largest.sku if largest else '?'} "
-                             f"({largest_cu} CU) meets the estimated demand "
-                             f"({demand.required_capacity_units} CU / {demand.recommended_sku})."),
-                    recommendation="Monitor utilisation after cutover; enable capacity metrics app."))
+                             f"({largest_cu} CU) meets the estimated demand ({basis})."),
+                    recommendation="Monitor utilisation after cutover; enable the Fabric Capacity Metrics app."))
             else:
                 findings.append(CapabilityFinding(
                     category="Capacity", severity="High",
                     target=largest.display_name if largest else "",
-                    message=(f"Largest active capacity ({largest_cu} CU) is below the estimated demand of "
-                             f"{demand.required_capacity_units} CU ({demand.recommended_sku}); "
-                             f"source Spark peak ~{demand.spark_vcores} vCores."),
-                    recommendation=f"Scale up to at least {demand.recommended_sku}, or stagger workloads with capacity autoscale."))
+                    message=(f"Largest active capacity ({largest_cu} CU) is below the estimated demand \u2014 {basis}. "
+                             f"{caveat}"),
+                    recommendation=(f"If real utilisation approaches this, scale toward {demand.recommended_sku} or "
+                                    f"use capacity autoscale / stagger heavy Spark jobs; otherwise right-size from metrics.")))
 
         # Region alignment
         src_regions = {str(w.get("workspace", {}).get("location", "")).lower().replace(" ", "")
@@ -373,9 +393,12 @@ def _summary_md(estate: FabricEstate, a: FabricReadinessAssessment) -> str:
     lines.append("")
     lines.append(f"- Pipelines {d.pipelines} · Notebooks {d.notebooks} · Dataflows {d.dataflows} · "
                  f"Spark pools {d.spark_pools} · SQL pools {d.sql_pools}")
-    lines.append(f"- Peak Spark vCores ~**{d.spark_vcores}** · dedicated SQL DWU {d.sql_dwu}")
+    lines.append(f"- Provisioned Spark **{d.spark_vcores}** vCores (largest pool {d.spark_peak_pool_vcores}); "
+                 f"concurrency-adjusted ~**{d.concurrent_spark_vcores}** vCores · dedicated SQL DWU {d.sql_dwu}")
     lines.append(f"- Estimated capacity requirement: **{d.required_capacity_units} CU** "
                  f"→ recommended **{d.recommended_sku or 'n/a'}**")
+    lines.append("- _Based on provisioned pool maxima, not observed utilisation — validate against actual "
+                 "Spark usage / the Fabric Capacity Metrics app before committing to an SKU._")
     lines.append("")
     if estate.capacities:
         lines.append("## Capacities")

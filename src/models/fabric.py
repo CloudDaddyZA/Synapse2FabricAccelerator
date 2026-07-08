@@ -85,7 +85,9 @@ class WorkloadDemand(BaseModel):
     dataflows: int = 0
     spark_pools: int = 0
     sql_pools: int = 0
-    spark_vcores: int = 0            # peak provisioned Spark vCores across pools
+    spark_vcores: int = 0            # total provisioned peak Spark vCores (sum of all pools)
+    spark_peak_pool_vcores: int = 0  # largest single pool (bounds one job's parallelism)
+    concurrent_spark_vcores: int = 0  # concurrency-adjusted estimate used for sizing
     sql_dwu: int = 0                 # summed dedicated SQL pool DWU
     recommended_sku: str = ""        # smallest F-SKU judged sufficient
     required_capacity_units: int = 0

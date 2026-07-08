@@ -333,11 +333,14 @@ def _fabestate_view(data: dict[str, Any]) -> str:
         f'<p>Pipelines <b>{demand.get("pipelines", 0)}</b> &middot; Notebooks <b>{demand.get("notebooks", 0)}</b> '
         f'&middot; Dataflows <b>{demand.get("dataflows", 0)}</b> &middot; Spark pools <b>{demand.get("spark_pools", 0)}</b> '
         f'&middot; SQL pools <b>{demand.get("sql_pools", 0)}</b></p>'
-        f'<p>Peak Spark vCores ~<b>{demand.get("spark_vcores", 0)}</b> &middot; dedicated SQL DWU <b>{demand.get("sql_dwu", 0)}</b> '
-        f'&rarr; estimated <b>{demand.get("required_capacity_units", 0)} CU</b>, recommended '
-        f'<b>{html.escape(str(demand.get("recommended_sku") or "n/a"))}</b>.</p>'
-        '<p class="muted">Fabric provides ~2 base Spark vCores per capacity unit (bursts higher). '
-        'Sizing is an estimate &mdash; validate with the Fabric Capacity Metrics app after cutover.</p></div>'
+        f'<p>Provisioned Spark <b>{demand.get("spark_vcores", 0)}</b> vCores '
+        f'(largest pool <b>{demand.get("spark_peak_pool_vcores", 0)}</b>) &middot; concurrency-adjusted '
+        f'~<b>{demand.get("concurrent_spark_vcores", 0)}</b> vCores &middot; dedicated SQL DWU '
+        f'<b>{demand.get("sql_dwu", 0)}</b> &rarr; estimated <b>{demand.get("required_capacity_units", 0)} CU</b>, '
+        f'recommended <b>{html.escape(str(demand.get("recommended_sku") or "n/a"))}</b>.</p>'
+        '<p class="muted">Sizing uses <i>provisioned</i> pool maxima (not observed utilisation): the largest '
+        'pool bounds one job, plus a fraction of the other pools running concurrently, at ~3 Spark vCores '
+        'per capacity unit (2 base &times; bursting). Validate with the Fabric Capacity Metrics app after cutover.</p></div>'
     )
 
     caps_tbl = _plain_table("Fabric capacities",

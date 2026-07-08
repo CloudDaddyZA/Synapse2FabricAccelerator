@@ -174,9 +174,12 @@ class ReportingAgent(BaseAgent):
                      f"({rd.get('largest_capacity_units', 0)} CU).\n")
         lines.append(f"Estimated workload demand: **{demand.get('required_capacity_units', 0)} CU** "
                      f"(recommended **{demand.get('recommended_sku') or 'n/a'}**) &mdash; "
-                     f"peak Spark ~{demand.get('spark_vcores', 0)} vCores, "
+                     f"provisioned Spark {demand.get('spark_vcores', 0)} vCores "
+                     f"(largest pool {demand.get('spark_peak_pool_vcores', 0)}, concurrency-adjusted "
+                     f"~{demand.get('concurrent_spark_vcores', 0)}), "
                      f"{demand.get('pipelines', 0)} pipelines, {demand.get('notebooks', 0)} notebooks, "
-                     f"{demand.get('dataflows', 0)} dataflows.\n")
+                     f"{demand.get('dataflows', 0)} dataflows. _Based on provisioned pool maxima, not observed "
+                     f"utilisation \u2014 validate with the Fabric Capacity Metrics app._\n")
         lines.append("## Capacities\n")
         lines.append(_table(["Capacity", "SKU", "CU", "Region", "State"],
                             [[c.get("display_name"), c.get("sku"), c.get("capacity_units"),
