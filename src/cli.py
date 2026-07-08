@@ -1,6 +1,6 @@
 """Typer CLI orchestrating the Synapse to Fabric Migration Accelerator.
 
-Commands: discover, inventory, assess, migrate, report, dashboard, optimize, run-all.
+Commands: discover, inventory, assess, migrate, report, dashboard, optimize, fabric-audit, run-all.
 Run with: python -m src.cli <command>
 """
 from __future__ import annotations
@@ -11,6 +11,7 @@ from rich.console import Console
 from .agents.assessment_agent import AssessmentAgent
 from .agents.dashboard_agent import DashboardAgent
 from .agents.discovery_agent import DiscoveryAgent
+from .agents.fabric_audit_agent import FabricAuditAgent
 from .agents.inventory_agent import InventoryAgent
 from .agents.migration_agent import MigrationAgent
 from .agents.optimization_agent import OptimizationAgent
@@ -72,10 +73,16 @@ def optimize(config: str = _CONFIG):
     _run(OptimizationAgent, config)
 
 
+@app.command(name="fabric-audit")
+def fabric_audit(config: str = _CONFIG):
+    """Audit the target Fabric environment and assess workload readiness."""
+    _run(FabricAuditAgent, config)
+
+
 @app.command(name="run-all")
 def run_all(config: str = _CONFIG):
     """Run the full pipeline in order."""
-    for cls in (DiscoveryAgent, InventoryAgent, AssessmentAgent, MigrationAgent, ReportingAgent, DashboardAgent, OptimizationAgent):
+    for cls in (DiscoveryAgent, InventoryAgent, AssessmentAgent, MigrationAgent, FabricAuditAgent, ReportingAgent, DashboardAgent, OptimizationAgent):
         _run(cls, config)
 
 

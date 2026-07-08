@@ -34,6 +34,7 @@ class Settings(BaseModel):
     include_powerbi_outputs: bool = True
     include_html_dashboard: bool = True
     include_copilot_optimization_pack: bool = True
+    include_fabric_audit: bool = True
 
     log_level: str = "INFO"
     retry_max_attempts: int = 5
@@ -41,6 +42,11 @@ class Settings(BaseModel):
     synapse_api_version: str = "2020-12-01"
     pipeline_run_history_days: int = 30
     include_pipeline_run_history: bool = True
+
+    # Target Microsoft Fabric environment audit. Optional filters restrict the
+    # audit to specific capacities / workspaces (by display name); empty = all.
+    fabric_capacity_names: list[str] = Field(default_factory=list)
+    fabric_workspace_names: list[str] = Field(default_factory=list)
 
     # Resolved at runtime from .env, never persisted to YAML.
     client_id: str | None = Field(default=None, exclude=True)

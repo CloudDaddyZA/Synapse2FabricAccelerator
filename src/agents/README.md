@@ -1,4 +1,4 @@
-# `src/agents/` — the seven pipeline agents
+# `src/agents/` — the eight pipeline agents
 
 Each agent extends `base_agent.py`, reads only the inputs it needs, writes to its own output folder, logs progress, and continues on partial failure (recording errors rather than aborting the run). They execute in the order below; `python -m src.cli run-all` chains them.
 
@@ -8,9 +8,10 @@ Each agent extends `base_agent.py`, reads only the inputs it needs, writes to it
 | 2 | `inventory_agent.py` | Inventory | workspaces (REST + DMVs) | `output/inventory/` |
 | 3 | `assessment_agent.py` | Assessment | inventory | `output/assessment/` |
 | 4 | `migration_agent.py` | Migration | inventory + assessment | `output/migration/` |
-| 5 | `reporting_agent.py` | Reporting | inventory + assessment + migration | `output/reports/` |
-| 6 | `dashboard_agent.py` | Dashboard | all of the above | `output/dashboard/` + `powerbi/*.csv` |
-| 7 | `optimization_agent.py` | Optimization | inventory + assessment | `output/copilot_optimization_pack/` |
+| 5 | `fabric_audit_agent.py` | Fabric Audit | inventory + live Fabric REST | `output/fabric_audit/` |
+| 6 | `reporting_agent.py` | Reporting | inventory + assessment + migration + fabric audit | `output/reports/` |
+| 7 | `dashboard_agent.py` | Dashboard | all of the above | `output/dashboard/` + `powerbi/*.csv` |
+| 8 | `optimization_agent.py` | Optimization | inventory + assessment | `output/copilot_optimization_pack/` |
 
 ---
 
@@ -43,17 +44,21 @@ Also emits the **Fabric Data Factory Migration Assistant (FDFMA)** hand-off pack
 
 Finally runs the **Fabric Notebook Modernizer** into `output/migration/notebook_modernization/`: for each Synapse notebook it auto-applies safe rewrites (`mssparkutils` → `notebookutils`), scores Fabric readiness, and writes a Fabric-ready `<workspace>/<notebook>.ipynb` whose first cell lists the manual actions (secrets → Key Vault, `abfss://` → OneLake, `synapsesql` → Warehouse/Lakehouse SQL, mounts → shortcuts, hardcoded Spark configs, Synapse magics), plus a `modernization_manifest.json`, `notebook_modernization.csv`, and `README.md`. Full cell fidelity requires notebooks in `raw_definitions.json` (captured by a live inventory run); otherwise it falls back to the code preview.
 
-## 5. Reporting — `reporting_agent.py`
-Generates 13 Markdown + HTML reports from saved JSON:
+## 5. Fabric Audit — `fabric_audit_agent.py`
+Audits the **target** Microsoft Fabric environment and judges whether the provisioned estate can run the migrated workloads. Enumerates the live estate — **capacities** (SKU → capacity units, region, state), **workspaces** (capacity assignment, roles), and **items** (Lakehouse / Warehouse / Notebook / DataPipeline / Dataflow / …) — via the Fabric REST API (`https://api.fabric.microsoft.com`, scope `.../.default`). Then sizes the source workload (peak Spark vCores, SQL DWU, artifact counts), recommends a minimum F-SKU, and emits `CapabilityFinding`s across **Capacity** (present / active / sizing), **Region** alignment, dedicated-**Workspace** capacity, and source→target **Coverage** (matching workspace + missing item types), producing a **verdict** (Ready / Ready with actions / Not ready / Unknown). Writes `fabric_estate.json`, `fabric_readiness_assessment.json`, and `fabric_audit_summary.md/.html`. Fully offline-safe: with no Fabric access it records the errors and writes an `Unknown`/inaccessible result rather than failing. Run standalone with `python -m src.cli fabric-audit`.
+
+## 6. Reporting — `reporting_agent.py`
+Generates Markdown + HTML reports from saved JSON:
 
 - **Executive** (KPIs incl. data flows, complexity bands, top risks, waves).
 - **Technical** (workspace inventory, notebooks, **data flows**, SQL pools, findings, Fabric targets, validation plan).
+- **Fabric Environment Readiness** (target estate verdict, capacities, readiness findings, and source→target coverage — from the Fabric Audit outputs).
 - **Role-aligned**: Admin, Data Engineering (incl. data flows), Data Warehousing, Data Integration (incl. data flows), plus risk register, dependency, and Fabric recommendations.
 
-## 6. Dashboard — `dashboard_agent.py`
-Assembles a single data dict from inventory/assessment/migration and renders the self-contained HTML dashboard via `templates/dashboard_template.py`. Also writes the Power BI CSV datasets (incl. `dataflows.csv`) and refreshes the model guide. The dashboard groups its dependency visualizations (Workspace Diagram, Trigger Dependency Diagram, Object Dependency Diagram, and Lineage) under a **Diagrams** dropdown, and the Fabric Readiness view embeds a delivery-team & timeline planner that converts per-artifact effort estimates into a calendar duration based on team head-counts and a GitHub Copilot productivity tier, and re-scopes its KPIs when a complexity band is selected. A **Notebook Modernization** view surfaces the Fabric Notebook Modernizer results (readiness bands, auto-changes-applied count, and a per-notebook readiness table, all workspace-filterable).
+## 7. Dashboard — `dashboard_agent.py`
+Assembles a single data dict from inventory/assessment/migration and renders the self-contained HTML dashboard via `templates/dashboard_template.py`. Also writes the Power BI CSV datasets (incl. `dataflows.csv`) and refreshes the model guide. The dashboard groups its dependency visualizations (Workspace Diagram, Trigger Dependency Diagram, Object Dependency Diagram, and Lineage) under a **Diagrams** dropdown, and under a **Fabric** dropdown surfaces the Fabric Readiness planner, a **Fabric Environment Audit** view (capacities, workspaces, item mix, readiness verdict + findings, and source→target coverage from `fabric_audit`), Deploy to Fabric, and Notebook Modernization. The Fabric Readiness view embeds a delivery-team & timeline planner that converts per-artifact effort estimates into a calendar duration based on team head-counts and a GitHub Copilot productivity tier, and re-scopes its KPIs when a complexity band is selected.
 
-## 7. Optimization — `optimization_agent.py`
+## 8. Optimization — `optimization_agent.py`
 Produces the **Copilot optimization pack**: per-artifact review prompts (pipeline / notebook / spark / SQL) plus source artifacts and an index `README.md`. No Copilot API calls are made — these are prompts for engineers to run in VS Code.
 
 ---

@@ -45,6 +45,14 @@ class DashboardAgent(BaseAgent):
         p = self.settings.subdir("migration") / "notebook_modernization" / "modernization_manifest.json"
         return read_json(p) if p.exists() else {}
 
+    def _fabric_estate(self):
+        p = self.settings.subdir("fabric_audit") / "fabric_estate.json"
+        return read_json(p) if p.exists() else {}
+
+    def _fabric_readiness(self):
+        p = self.settings.subdir("fabric_audit") / "fabric_readiness_assessment.json"
+        return read_json(p) if p.exists() else {}
+
     def _run_errors(self):
         p = self.settings.output_dir / "logs" / "inventory_errors.json"
         if not p.exists():
@@ -84,6 +92,8 @@ class DashboardAgent(BaseAgent):
             "fabric_optimizations": self._optimizations(),
             "fdfma": self._fdfma(),
             "modernization": self._modernization(),
+            "fabric_estate": self._fabric_estate(),
+            "fabric_readiness": self._fabric_readiness(),
         }
         data["run_summary"] = _run_summary(data["pipeline_runs"], data["pipeline_run_stats"])
         out = self.output_dir

@@ -42,6 +42,8 @@ def test_dashboard(seeded):
     assert "Object Dependency Diagram" in html
     assert "Edge colour shows table access" in html
     assert 'data-view="revspider"' not in html
+    assert 'data-view="fabestate"' in html
+    assert "Fabric Environment Audit" in html
 
 
 def test_dashboard_notebook_modernization(seeded):
@@ -57,3 +59,94 @@ def test_optimization(seeded):
     r = OptimizationAgent(seeded).run()
     assert r["prompts"] >= 3
     assert (seeded.subdir("copilot_optimization_pack") / "copilot_review_index.xlsx").exists()
+
+
+class _FakeFabricReady:
+    """Fake Fabric REST client returning a healthy, well-sized estate."""
+
+    def __init__(self, credential, settings):
+        pass
+
+    def capacities(self):
+        return [{"id": "cap1", "displayName": "prod-cap", "sku": "F64",
+                 "region": "East US", "state": "Active"}]
+
+    def workspaces(self):
+        return [{"id": "ws1", "displayName": "synw-demo", "type": "Workspace",
+                 "capacityId": "cap1"}]
+
+    def workspace_items(self, workspace_id):
+        return [{"id": "i1", "displayName": "pl1", "type": "DataPipeline"},
+                {"id": "i2", "displayName": "nb1", "type": "Notebook"},
+                {"id": "i3", "displayName": "df1", "type": "Dataflow"},
+                {"id": "i4", "displayName": "dwh", "type": "Warehouse"},
+                {"id": "i5", "displayName": "lh", "type": "Lakehouse"}]
+
+    def workspace_role_assignments(self, workspace_id):
+        return [{"principal": {"displayName": "admin", "type": "User"}, "role": "Admin"}]
+
+
+class _FakeFabricNoAccess:
+    """Fake Fabric REST client that always fails (unprovisioned / no permission)."""
+
+    def __init__(self, credential, settings):
+        pass
+
+    def _boom(self, *a, **k):
+        raise RuntimeError("403 Forbidden")
+
+    capacities = workspaces = _boom
+
+    def workspace_items(self, workspace_id):
+        raise RuntimeError("403 Forbidden")
+
+    def workspace_role_assignments(self, workspace_id):
+        raise RuntimeError("403 Forbidden")
+
+
+def _patch_fabric(monkeypatch, fake):
+    from src.agents import fabric_audit_agent as mod
+    monkeypatch.setattr(mod, "get_credential", lambda settings: object())
+    monkeypatch.setattr(mod, "FabricRestClient", fake)
+
+
+def test_fabric_audit_ready(seeded, monkeypatch):
+    from src.agents.fabric_audit_agent import FabricAuditAgent
+    _patch_fabric(monkeypatch, _FakeFabricReady)
+    r = FabricAuditAgent(seeded).run()
+    assert r["accessible"] is True
+    assert r["capacities"] == 1
+    assert r["items"] == 5
+    assert r["verdict"] in ("Ready", "Ready with actions")
+    est = (seeded.subdir("fabric_audit") / "fabric_estate.json")
+    rd = (seeded.subdir("fabric_audit") / "fabric_readiness_assessment.json")
+    assert est.exists() and rd.exists()
+    assert (seeded.subdir("fabric_audit") / "fabric_audit_summary.md").exists()
+
+
+def test_fabric_audit_no_access(seeded, monkeypatch):
+    from src.agents.fabric_audit_agent import FabricAuditAgent
+    _patch_fabric(monkeypatch, _FakeFabricNoAccess)
+    r = FabricAuditAgent(seeded).run()
+    assert r["accessible"] is False
+    assert r["verdict"] == "Unknown"
+    # Still writes valid outputs so downstream agents never break.
+    assert (seeded.subdir("fabric_audit") / "fabric_readiness_assessment.json").exists()
+
+
+def test_fabric_audit_in_reports_and_dashboard(seeded, monkeypatch):
+    from src.agents.fabric_audit_agent import FabricAuditAgent
+    from src.agents.reporting_agent import ReportingAgent
+    _patch_fabric(monkeypatch, _FakeFabricReady)
+    FabricAuditAgent(seeded).run()
+    AssessmentAgent(seeded).run()
+    MigrationAgent(seeded).run()
+    ReportingAgent(seeded).run()
+    assert (seeded.subdir("reports") / "fabric_environment_readiness.html").exists()
+    fenv = (seeded.subdir("reports") / "fabric_environment_readiness.md").read_text(encoding="utf-8")
+    assert "Readiness verdict" in fenv
+    DashboardAgent(seeded).run()
+    html = (seeded.subdir("dashboard") / "index.html").read_text(encoding="utf-8")
+    assert "Readiness:" in html
+    assert "prod-cap" in html
+

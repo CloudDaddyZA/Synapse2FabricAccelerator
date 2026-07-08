@@ -23,6 +23,7 @@ _VIEWS = [
     ("warehouse", "Data Warehousing"),
     ("integration", "Data Integration"),
     ("fabready", "Fabric Readiness"),
+    ("fabestate", "Fabric Environment Audit"),
     ("migrate", "Deploy to Fabric"),
     ("notebooks", "Notebook Modernization"),
     ("pipelineops", "Pipeline Ops"),
@@ -36,7 +37,7 @@ _VIEWS = [
 _DIAGRAM_KEYS = ("spider", "trigspider", "objdep", "lineage")
 
 # Fabric migration views grouped under the "Fabric" dropdown in the top nav.
-_FABRIC_KEYS = ("fabready", "migrate", "notebooks")
+_FABRIC_KEYS = ("fabready", "fabestate", "migrate", "notebooks")
 
 
 def _nav_dropdown(dd_id: str, btn_id: str, menu_id: str, label: str,
@@ -273,6 +274,124 @@ def _modernization_view(data: dict[str, Any]) -> str:
     return f'<div class="grid">{header}{tbl}</div>'
 
 
+_VERDICT_COLOR = {"Ready": "#107c10", "Ready with actions": "#c47f00",
+                  "Not ready": "#b00020", "Unknown": "#667"}
+_SEV_COLOR = {"Critical": "#b00020", "High": "#d05a00", "Medium": "#c47f00",
+              "Low": "#3a7", "Info": "#667", "Pass": "#107c10"}
+_SEV_ORDER = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3, "Info": 4, "Pass": 5}
+
+
+def _plain_table(title: str, rows: list[dict[str, Any]], cols: list[str]) -> str:
+    """A table NOT bound to the workspace filter (for global Fabric-estate data)."""
+    head = "".join(f"<th>{html.escape(c.replace('_', ' '))}</th>" for c in cols)
+    body = "".join(
+        "<tr>" + "".join(f"<td>{html.escape(str(r.get(c, '')))}</td>" for c in cols) + "</tr>"
+        for r in rows)
+    inner = body or f'<tr><td colspan="{len(cols)}">No data (run fabric-audit with access).</td></tr>'
+    return (f'<div class="card"><h3>{html.escape(title)}</h3>'
+            f'<table><thead><tr>{head}</tr></thead><tbody>{inner}</tbody></table></div>')
+
+
+def _fabestate_view(data: dict[str, Any]) -> str:
+    """Render the target-Fabric environment audit (estate + readiness verdict)."""
+    est = data.get("fabric_estate") or {}
+    rd = data.get("fabric_readiness") or {}
+    verdict = rd.get("verdict", "Unknown")
+    vcolor = _VERDICT_COLOR.get(verdict, "#667")
+    demand = rd.get("demand") or {}
+    caps = est.get("capacities") or []
+    wss = est.get("workspaces") or []
+    items = est.get("items") or []
+    intro = (
+        '<div class="card" style="grid-column:1/-1">'
+        '<h3>Target Microsoft Fabric &mdash; Environment Audit</h3>'
+        '<p>Validates whether the provisioned Fabric tenant can run the migrated Synapse workloads. '
+        'It enumerates the live estate (capacities, workspaces, items) via the Fabric REST API, sizes the '
+        'source workload, and checks capacity sizing, region alignment, dedicated-capacity assignment, and '
+        'source&rarr;target coverage. Run <code>python -m src.cli fabric-audit</code> to refresh.</p>'
+        f'<div style="display:inline-block;background:{vcolor};color:#fff;border-radius:14px;'
+        f'padding:.25rem 1rem;font-weight:700;font-size:1rem">Readiness: {html.escape(verdict)}</div>'
+    )
+    if not est.get("accessible"):
+        intro += ('<p class="muted" style="margin:.7rem 0 0">No access to the Fabric REST API yet '
+                  '(unprovisioned tenant or missing permission). Authenticate with a Fabric-admin capable '
+                  'principal and re-run <code>fabric-audit</code> to populate this view.</p></div>')
+        return '<div class="grid">' + intro + '</div>'
+    intro += '</div>'
+
+    kpis = (
+        f'<div class="card"><div class="kpi">{len(caps)}</div>Capacities</div>'
+        f'<div class="card"><div class="kpi">{len(wss)}</div>Fabric Workspaces</div>'
+        f'<div class="card"><div class="kpi">{len(items)}</div>Fabric Items</div>'
+        f'<div class="card"><div class="kpi">{html.escape(str(rd.get("largest_capacity_sku") or "n/a"))}</div>Largest capacity</div>'
+        f'<div class="card"><div class="kpi">{html.escape(str(demand.get("recommended_sku") or "n/a"))}</div>Recommended SKU</div>'
+        f'<div class="card"><div class="kpi">{demand.get("required_capacity_units", 0)}</div>Required CU</div>'
+    )
+
+    dcard = (
+        '<div class="card" style="grid-column:1/-1"><h3>Estimated source workload demand</h3>'
+        f'<p>Pipelines <b>{demand.get("pipelines", 0)}</b> &middot; Notebooks <b>{demand.get("notebooks", 0)}</b> '
+        f'&middot; Dataflows <b>{demand.get("dataflows", 0)}</b> &middot; Spark pools <b>{demand.get("spark_pools", 0)}</b> '
+        f'&middot; SQL pools <b>{demand.get("sql_pools", 0)}</b></p>'
+        f'<p>Peak Spark vCores ~<b>{demand.get("spark_vcores", 0)}</b> &middot; dedicated SQL DWU <b>{demand.get("sql_dwu", 0)}</b> '
+        f'&rarr; estimated <b>{demand.get("required_capacity_units", 0)} CU</b>, recommended '
+        f'<b>{html.escape(str(demand.get("recommended_sku") or "n/a"))}</b>.</p>'
+        '<p class="muted">Fabric provides ~2 base Spark vCores per capacity unit (bursts higher). '
+        'Sizing is an estimate &mdash; validate with the Fabric Capacity Metrics app after cutover.</p></div>'
+    )
+
+    caps_tbl = _plain_table("Fabric capacities",
+                     [{"display_name": c.get("display_name"), "sku": c.get("sku"),
+                       "capacity_units": c.get("capacity_units"), "region": c.get("region"),
+                       "state": c.get("state")} for c in caps],
+                     ["display_name", "sku", "capacity_units", "region", "state"])
+
+    # Findings, coloured by severity, sorted by severity.
+    findings = sorted(rd.get("findings") or [], key=lambda f: _SEV_ORDER.get(f.get("severity"), 9))
+    frows = []
+    for f in findings:
+        sev = f.get("severity", "")
+        color = _SEV_COLOR.get(sev, "#667")
+        badge = (f'<span style="background:{color};color:#fff;border-radius:3px;'
+                 f'padding:.03rem .4rem;font-size:.78rem;font-weight:600">{html.escape(sev)}</span>')
+        frows.append(
+            f'<tr><td>{badge}</td><td>{html.escape(str(f.get("category", "")))}</td>'
+            f'<td>{html.escape(str(f.get("target", "")))}</td>'
+            f'<td>{html.escape(str(f.get("message", "")))}</td>'
+            f'<td>{html.escape(str(f.get("recommendation", "")))}</td></tr>')
+    finner = "".join(frows) or '<tr><td colspan="5">No findings.</td></tr>'
+    findings_card = (
+        '<div class="card" style="grid-column:1/-1"><h3>Readiness findings</h3>'
+        '<table><thead><tr><th>Severity</th><th>Category</th><th>Target</th>'
+        '<th>Finding</th><th>Recommendation</th></tr></thead>'
+        f'<tbody>{finner}</tbody></table></div>')
+
+    cov = rd.get("coverage") or []
+    cov_rows = [{"source_workspace": r.get("source_workspace"),
+                 "target_workspace": r.get("target_workspace") or "—",
+                 "matched": "yes" if r.get("matched") else "no",
+                 "target_item_count": r.get("target_item_count", 0),
+                 "missing_item_types": ", ".join(r.get("missing_item_types") or []) or "—"}
+                for r in cov]
+    cov_tbl = _plain_table("Migration coverage (source \u2192 target)", cov_rows,
+                    ["source_workspace", "target_workspace", "matched",
+                     "target_item_count", "missing_item_types"])
+
+    mix = est.get("item_type_counts") or {}
+    mix_rows = [{"item_type": k, "count": v} for k, v in mix.items()]
+    mix_tbl = _plain_table("Fabric item mix", mix_rows, ["item_type", "count"])
+
+    ws_tbl = _plain_table("Fabric workspaces",
+                   [{"name": w.get("name"), "capacity_sku": w.get("capacity_sku") or "—",
+                     "capacity_region": w.get("capacity_region") or "—",
+                     "on_dedicated_capacity": "yes" if w.get("on_dedicated_capacity") else "no",
+                     "item_count": w.get("item_count", 0)} for w in wss],
+                   ["name", "capacity_sku", "capacity_region", "on_dedicated_capacity", "item_count"])
+
+    return ('<div class="grid">' + intro + kpis + dcard + caps_tbl
+            + findings_card + cov_tbl + ws_tbl + mix_tbl + '</div>')
+
+
 
 def render_dashboard(data: dict[str, Any]) -> str:
     grouped = set(_FABRIC_KEYS) | set(_DIAGRAM_KEYS)
@@ -392,6 +511,7 @@ def render_dashboard(data: dict[str, Any]) -> str:
             + "</div>",
         "migrate": _fdfma_view(data),
         "notebooks": _modernization_view(data),
+        "fabestate": _fabestate_view(data),
         "pipelineops": '<div class="grid">'
             '<div class="card"><div class="kpi" id="po_total">0</div>Pipeline Runs</div>'
             '<div class="card"><div class="kpi" id="po_success">0%</div>Success Rate</div>'

@@ -18,7 +18,7 @@ _HTML_SHELL = """<!DOCTYPE html>
  th,td{border:1px solid #ddd;padding:8px;text-align:left} th{background:#1F4E78;color:#fff}
  tbody tr:hover,tr:hover{background:#eef4fb} code{background:#f4f4f4;padding:2px 4px} .crit{color:#b00020;font-weight:bold}
 </style></head><body>
-<nav><a href="executive_migration_summary.html">Executive Summary</a><a href="technical_assessment_report.html">Technical Report</a><a href="admin_report.html">Admin</a><a href="data_engineering_report.html">Data Engineering</a><a href="data_warehousing_report.html">Data Warehousing</a><a href="data_integration_report.html">Data Integration</a><a href="fabric_recommendations_report.html">Fabric Targets</a><a href="synapse_audit_report.html">Full Audit</a><a href="../dashboard/index.html">Dashboard ↗</a></nav>
+<nav><a href="executive_migration_summary.html">Executive Summary</a><a href="technical_assessment_report.html">Technical Report</a><a href="admin_report.html">Admin</a><a href="data_engineering_report.html">Data Engineering</a><a href="data_warehousing_report.html">Data Warehousing</a><a href="data_integration_report.html">Data Integration</a><a href="fabric_recommendations_report.html">Fabric Targets</a><a href="fabric_environment_readiness.html">Fabric Readiness</a><a href="synapse_audit_report.html">Full Audit</a><a href="../dashboard/index.html">Dashboard ↗</a></nav>
 <main>{{ body }}</main></body></html>"""
 
 

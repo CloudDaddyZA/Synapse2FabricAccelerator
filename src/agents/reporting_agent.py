@@ -43,16 +43,23 @@ class ReportingAgent(BaseAgent):
         findings = self._load("assessment", "security_findings.json", [])
         recs = self._load("migration", "fabric_recommendations.json", [])
         waves = self._load("migration", "migration_waves.json", [])
+        fabric_estate = self._load("fabric_audit", "fabric_estate.json", {})
+        fabric_rd = self._load("fabric_audit", "fabric_readiness_assessment.json", {})
         out = self.output_dir
 
         exec_md = self._executive(inv, summary, scores, findings, recs, waves)
         tech_md = self._technical(inv, scores, findings, recs)
+        fabric_env_md = self._fabric_env(fabric_estate, fabric_rd)
         write_markdown(exec_md, out / "executive_migration_summary.md")
         write_html("Executive Migration Summary", exec_md, out / "executive_migration_summary.html")
         write_markdown(tech_md, out / "technical_assessment_report.md")
         write_html("Technical Assessment Report", tech_md, out / "technical_assessment_report.html")
-        write_markdown("# Synapse Audit Report\n\n" + exec_md + "\n\n---\n\n" + tech_md, out / "synapse_audit_report.md")
-        write_html("Synapse Audit Report", exec_md + "\n\n" + tech_md, out / "synapse_audit_report.html")
+        write_markdown(fabric_env_md, out / "fabric_environment_readiness.md")
+        write_html("Fabric Environment Readiness", fabric_env_md, out / "fabric_environment_readiness.html")
+        write_markdown("# Synapse Audit Report\n\n" + exec_md + "\n\n---\n\n" + tech_md
+                       + "\n\n---\n\n" + fabric_env_md, out / "synapse_audit_report.md")
+        write_html("Synapse Audit Report", exec_md + "\n\n" + tech_md + "\n\n" + fabric_env_md,
+                   out / "synapse_audit_report.html")
         write_markdown(self._risk_register(scores), out / "risk_register.md")
         write_markdown(self._dependency(inv), out / "dependency_report.md")
         write_markdown(self._fabric_recs(recs), out / "fabric_recommendations_report.md")
@@ -148,6 +155,46 @@ class ReportingAgent(BaseAgent):
             "## Fabric Target Recommendations\n" + fmap + "\n"
             "## Validation Plan\n- Row counts match per table\n- Schema/type parity\n- Job duration baseline vs Fabric\n- RBAC/security parity"
         )
+
+    def _fabric_env(self, estate: dict, rd: dict) -> str:
+        """Target Fabric environment readiness section (from fabric-audit outputs)."""
+        verdict = rd.get("verdict", "Unknown")
+        demand = rd.get("demand") or {}
+        lines = ["# Target Fabric Environment Readiness\n",
+                 f"**Readiness verdict:** {verdict}\n"]
+        if not estate.get("accessible"):
+            lines.append("_No access to the Fabric REST API yet. Authenticate with a Fabric-admin "
+                         "capable principal and run `fabric-audit` to populate this section._\n")
+            return "\n".join(lines)
+        caps = estate.get("capacities") or []
+        lines.append(f"Estate: **{len(caps)}** capacities, "
+                     f"**{len(estate.get('workspaces') or [])}** workspaces, "
+                     f"**{len(estate.get('items') or [])}** items. "
+                     f"Largest active capacity: **{rd.get('largest_capacity_sku') or 'n/a'}** "
+                     f"({rd.get('largest_capacity_units', 0)} CU).\n")
+        lines.append(f"Estimated workload demand: **{demand.get('required_capacity_units', 0)} CU** "
+                     f"(recommended **{demand.get('recommended_sku') or 'n/a'}**) &mdash; "
+                     f"peak Spark ~{demand.get('spark_vcores', 0)} vCores, "
+                     f"{demand.get('pipelines', 0)} pipelines, {demand.get('notebooks', 0)} notebooks, "
+                     f"{demand.get('dataflows', 0)} dataflows.\n")
+        lines.append("## Capacities\n")
+        lines.append(_table(["Capacity", "SKU", "CU", "Region", "State"],
+                            [[c.get("display_name"), c.get("sku"), c.get("capacity_units"),
+                              c.get("region"), c.get("state")] for c in caps]))
+        order = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3, "Info": 4, "Pass": 5}
+        findings = sorted(rd.get("findings") or [], key=lambda f: order.get(f.get("severity"), 9))
+        lines.append("\n## Readiness findings\n")
+        lines.append(_table(["Severity", "Category", "Target", "Finding", "Recommendation"],
+                            [[f.get("severity"), f.get("category"), f.get("target"),
+                              f.get("message"), f.get("recommendation")] for f in findings],
+                            "No findings."))
+        lines.append("\n## Migration coverage (source \u2192 target)\n")
+        lines.append(_table(["Source Workspace", "Target Workspace", "Matched", "Target Items", "Missing Item Types"],
+                            [[r.get("source_workspace"), r.get("target_workspace") or "\u2014",
+                              "yes" if r.get("matched") else "no", r.get("target_item_count", 0),
+                              ", ".join(r.get("missing_item_types") or []) or "\u2014"]
+                             for r in (rd.get("coverage") or [])]))
+        return "\n".join(lines)
 
     def _risk_register(self, scores) -> str:
         rows = [[s["artifact"], s["artifact_type"], s["workspace"], s.get("migration_complexity"),
