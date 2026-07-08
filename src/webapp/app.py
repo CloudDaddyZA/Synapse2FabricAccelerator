@@ -50,6 +50,22 @@ def _discovered_workspaces(config_path: str | None) -> list[str]:
     return sorted({w["name"] for w in data if isinstance(w, dict) and w.get("name")})
 
 
+def _fabric_scope(config_path: str | None) -> tuple[list[str], list[str]]:
+    """Fabric workspaces and capacities found by a prior fabric-audit run."""
+    f = load_settings(config_path).output_dir / "fabric_audit" / "fabric_estate.json"
+    if not f.exists():
+        return [], []
+    try:
+        data = json.loads(f.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        return [], []
+    workspaces = sorted({w.get("name") for w in data.get("workspaces", [])
+                         if isinstance(w, dict) and w.get("name")})
+    capacities = sorted({c.get("display_name") for c in data.get("capacities", [])
+                         if isinstance(c, dict) and c.get("display_name")})
+    return workspaces, capacities
+
+
 def create_app(config_path: str | None = None) -> Flask:
     app = Flask(__name__)
     runner.config_path = config_path
@@ -113,6 +129,33 @@ def create_app(config_path: str | None = None) -> Flask:
         existing["workspace_names"] = selected
         cfg_path.write_text(yaml.safe_dump(existing, sort_keys=False), encoding="utf-8")
         return jsonify({"ok": True, "selected": selected})
+
+    @app.get("/fabric-scope")
+    def fabric_scope():
+        settings = load_settings(config_path)
+        ws, caps = _fabric_scope(config_path)
+        return jsonify({
+            "workspaces": {"available": ws, "selected": settings.fabric_workspace_names},
+            "capacities": {"available": caps, "selected": settings.fabric_capacity_names},
+        })
+
+    @app.post("/fabric-scope")
+    def save_fabric_scope():
+        payload = request.get_json(silent=True) or {}
+
+        def _clean(v):
+            return [str(s).strip() for s in v if str(s).strip()] if isinstance(v, list) else []
+
+        ws = _clean(payload.get("workspaces", []))
+        caps = _clean(payload.get("capacities", []))
+        cfg_path.parent.mkdir(parents=True, exist_ok=True)
+        existing = {}
+        if cfg_path.exists():
+            existing = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+        existing["fabric_workspace_names"] = ws
+        existing["fabric_capacity_names"] = caps
+        cfg_path.write_text(yaml.safe_dump(existing, sort_keys=False), encoding="utf-8")
+        return jsonify({"ok": True, "workspaces": ws, "capacities": caps})
 
     @app.get("/status")
     def status():

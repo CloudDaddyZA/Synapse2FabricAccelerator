@@ -36,6 +36,31 @@
   </section>
 
   <section class="card">
+    <h2>Fabric audit scope</h2>
+    <p class="muted">Restrict the <strong>fabric-audit</strong> stage to specific Fabric workspaces and capacities
+      (a capacity is the subscription-billed Fabric resource). Leave all checked to audit everything.
+      The lists populate after a fabric-audit run.</p>
+    <div class="wsel">
+      <div class="wsel-head"><strong>Fabric workspaces</strong><span class="muted" id="fabws-count"></span></div>
+      <div class="wsel-actions">
+        <button type="button" onclick="fabAll('ws',true)">Select all</button>
+        <button type="button" onclick="fabAll('ws',false)">Clear</button>
+        <button type="button" onclick="loadFabricScope()">↻ Reload</button>
+        <span id="fab-saved" class="muted"></span>
+      </div>
+      <div id="fabws-list" class="wsel-list"></div>
+    </div>
+    <div class="wsel">
+      <div class="wsel-head"><strong>Capacities (subscription-billed)</strong><span class="muted" id="fabcap-count"></span></div>
+      <div class="wsel-actions">
+        <button type="button" onclick="fabAll('cap',true)">Select all</button>
+        <button type="button" onclick="fabAll('cap',false)">Clear</button>
+      </div>
+      <div id="fabcap-list" class="wsel-list"></div>
+    </div>
+  </section>
+
+  <section class="card">
     <h2>Status: <span id="state" class="badge idle">idle</span> <span id="job"></span> <span id="elapsed" class="muted"></span></h2>
     <div id="steps" class="steps"></div>
     <pre id="logs" class="logs">No job started yet.</pre>
@@ -143,5 +168,67 @@ function saveWorkspaces(){
   }, 400);
 }
 loadWorkspaces();
+
+// ---- Fabric audit scope (workspaces + capacities) ----
+let FAB_WS = [], FAB_CAP = [];
+async function loadFabricScope(){
+  const d = await (await fetch('/fabric-scope')).json();
+  FAB_WS = d.workspaces.available || [];
+  FAB_CAP = d.capacities.available || [];
+  renderFab('ws', FAB_WS, new Set(d.workspaces.selected || []));
+  renderFab('cap', FAB_CAP, new Set(d.capacities.selected || []));
+}
+function renderFab(kind, avail, sel){
+  const all = sel.size === 0;  // empty saved selection means "audit all"
+  const listId = kind === 'ws' ? 'fabws-list' : 'fabcap-list';
+  const countId = kind === 'ws' ? 'fabws-count' : 'fabcap-count';
+  const list = document.getElementById(listId);
+  if(!avail.length){
+    list.innerHTML = '';
+    document.getElementById(countId).textContent = '(run fabric-audit first)';
+    return;
+  }
+  list.innerHTML = avail.map(w => {
+    const checked = (all || sel.has(w)) ? 'checked' : '';
+    const safe = w.replace(/"/g, '&quot;');
+    return `<label class="wsel-item"><input type="checkbox" value="${safe}" ${checked} onchange="saveFabricScope()"> ${safe}</label>`;
+  }).join('');
+  updateFabCount(kind);
+}
+function fabSelected(kind){
+  const listId = kind === 'ws' ? 'fabws-list' : 'fabcap-list';
+  return Array.from(document.querySelectorAll('#'+listId+' input:checked')).map(c => c.value);
+}
+function updateFabCount(kind){
+  const avail = kind === 'ws' ? FAB_WS : FAB_CAP;
+  const countId = kind === 'ws' ? 'fabws-count' : 'fabcap-count';
+  const n = fabSelected(kind).length;
+  document.getElementById(countId).textContent = avail.length ? `(${n}/${avail.length} selected)` : '';
+}
+function fabAll(kind, on){
+  const listId = kind === 'ws' ? 'fabws-list' : 'fabcap-list';
+  document.querySelectorAll('#'+listId+' input').forEach(c => c.checked = on);
+  saveFabricScope();
+}
+let _fabTimer;
+function saveFabricScope(){
+  updateFabCount('ws'); updateFabCount('cap');
+  clearTimeout(_fabTimer);
+  _fabTimer = setTimeout(async () => {
+    const wsSel = fabSelected('ws'), capSel = fabSelected('cap');
+    // All selected => save empty (= audit all, future items included).
+    const ws = (wsSel.length === FAB_WS.length) ? [] : wsSel;
+    const cap = (capSel.length === FAB_CAP.length) ? [] : capSel;
+    const el = document.getElementById('fab-saved');
+    const r = await fetch('/fabric-scope', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({workspaces: ws, capacities: cap}),
+    });
+    if(r.ok){ el.textContent = 'Saved ✓'; setTimeout(() => el.textContent = '', 1500); }
+    else { el.textContent = 'Save failed'; }
+  }, 400);
+}
+loadFabricScope();
 </script>
 {% endblock %}

@@ -113,6 +113,9 @@ class FabricAuditAgent(BaseAgent):
                 if ws_filter and name not in ws_filter:
                     continue
                 cid = w.get("capacityId", "") or ""
+                # When a capacity filter is set, only audit workspaces on those capacities.
+                if cap_filter and cid not in cap_by_id:
+                    continue
                 cap = cap_by_id.get(cid)
                 ws = FabricWorkspace(
                     id=w.get("id", ""), name=name, description=w.get("description", ""),
