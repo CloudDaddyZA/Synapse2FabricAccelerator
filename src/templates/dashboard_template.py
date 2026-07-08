@@ -281,13 +281,22 @@ _SEV_COLOR = {"Critical": "#b00020", "High": "#d05a00", "Medium": "#c47f00",
 _SEV_ORDER = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3, "Info": 4, "Pass": 5}
 
 
-def _plain_table(title: str, rows: list[dict[str, Any]], cols: list[str]) -> str:
-    """A table NOT bound to the workspace filter (for global Fabric-estate data)."""
+def _plain_table(title: str, rows: list[dict[str, Any]], cols: list[str], clickable: bool = False) -> str:
+    """A table NOT bound to the workspace filter (for global Fabric-estate data).
+
+    When ``clickable`` is set, each row carries the full object in ``data-row`` and
+    a ``fabrow`` class so a click opens the shared detail drawer (like other views).
+    """
     head = "".join(f"<th>{html.escape(c.replace('_', ' '))}</th>" for c in cols)
-    body = "".join(
-        "<tr>" + "".join(f"<td>{html.escape(str(r.get(c, '')))}</td>" for c in cols) + "</tr>"
-        for r in rows)
-    inner = body or f'<tr><td colspan="{len(cols)}">No data (run fabric-audit with access).</td></tr>'
+    body_rows = []
+    for r in rows:
+        cells = "".join(f"<td>{html.escape(str(r.get(c, '')))}</td>" for c in cols)
+        if clickable:
+            rowjson = html.escape(json.dumps(r), quote=True)
+            body_rows.append(f'<tr class="fabrow" data-row="{rowjson}" style="cursor:pointer">{cells}</tr>')
+        else:
+            body_rows.append(f"<tr>{cells}</tr>")
+    inner = "".join(body_rows) or f'<tr><td colspan="{len(cols)}">No data (run fabric-audit with access).</td></tr>'
     return (f'<div class="card"><h3>{html.escape(title)}</h3>'
             f'<table><thead><tr>{head}</tr></thead><tbody>{inner}</tbody></table></div>')
 
@@ -308,7 +317,8 @@ def _fabestate_view(data: dict[str, Any]) -> str:
         '<p>Validates whether the provisioned Fabric tenant can run the migrated Synapse workloads. '
         'It enumerates the live estate (capacities, workspaces, items) via the Fabric REST API, sizes the '
         'source workload, and checks capacity sizing, region alignment, dedicated-capacity assignment, and '
-        'source&rarr;target coverage. Run <code>python -m src.cli fabric-audit</code> to refresh.</p>'
+        'source&rarr;target coverage. Run <code>python -m src.cli fabric-audit</code> to refresh. '
+        '<b>Click any capacity, workspace, coverage row, or item type</b> for full details.</p>'
         f'<div style="display:inline-block;background:{vcolor};color:#fff;border-radius:14px;'
         f'padding:.25rem 1rem;font-weight:700;font-size:1rem">Readiness: {html.escape(verdict)}</div>'
     )
@@ -346,8 +356,9 @@ def _fabestate_view(data: dict[str, Any]) -> str:
     caps_tbl = _plain_table("Fabric capacities",
                      [{"display_name": c.get("display_name"), "sku": c.get("sku"),
                        "capacity_units": c.get("capacity_units"), "region": c.get("region"),
-                       "state": c.get("state")} for c in caps],
-                     ["display_name", "sku", "capacity_units", "region", "state"])
+                       "state": c.get("state"), "id": c.get("id", ""),
+                       "admins": ", ".join(c.get("admins") or []) or "—"} for c in caps],
+                     ["display_name", "sku", "capacity_units", "region", "state"], clickable=True)
 
     # Findings, coloured by severity, sorted by severity.
     findings = sorted(rd.get("findings") or [], key=lambda f: _SEV_ORDER.get(f.get("severity"), 9))
@@ -374,22 +385,28 @@ def _fabestate_view(data: dict[str, Any]) -> str:
                  "target_workspace": r.get("target_workspace") or "—",
                  "matched": "yes" if r.get("matched") else "no",
                  "target_item_count": r.get("target_item_count", 0),
+                 "expected_item_types": ", ".join(r.get("expected_item_types") or []) or "—",
+                 "present_item_types": ", ".join(r.get("present_item_types") or []) or "—",
                  "missing_item_types": ", ".join(r.get("missing_item_types") or []) or "—"}
                 for r in cov]
     cov_tbl = _plain_table("Migration coverage (source \u2192 target)", cov_rows,
                     ["source_workspace", "target_workspace", "matched",
-                     "target_item_count", "missing_item_types"])
+                     "target_item_count", "missing_item_types"], clickable=True)
 
     mix = est.get("item_type_counts") or {}
     mix_rows = [{"item_type": k, "count": v} for k, v in mix.items()]
-    mix_tbl = _plain_table("Fabric item mix", mix_rows, ["item_type", "count"])
+    mix_tbl = _plain_table("Fabric item mix", mix_rows, ["item_type", "count"], clickable=True)
 
     ws_tbl = _plain_table("Fabric workspaces",
                    [{"name": w.get("name"), "capacity_sku": w.get("capacity_sku") or "—",
                      "capacity_region": w.get("capacity_region") or "—",
                      "on_dedicated_capacity": "yes" if w.get("on_dedicated_capacity") else "no",
-                     "item_count": w.get("item_count", 0)} for w in wss],
-                   ["name", "capacity_sku", "capacity_region", "on_dedicated_capacity", "item_count"])
+                     "item_count": w.get("item_count", 0), "id": w.get("id", ""),
+                     "type": w.get("type", "") or "—", "capacity_id": w.get("capacity_id", "") or "—",
+                     "roles": ", ".join(f"{r.get('principal', '')} ({r.get('role', '')})"
+                                        for r in (w.get("roles") or [])) or "—"} for w in wss],
+                   ["name", "capacity_sku", "capacity_region", "on_dedicated_capacity", "item_count"],
+                   clickable=True)
 
     return ('<div class="grid">' + intro + kpis + dcard + caps_tbl
             + findings_card + cov_tbl + ws_tbl + mix_tbl + '</div>')
@@ -721,6 +738,14 @@ function detail(rowjson,ws){let r={};try{r=JSON.parse(rowjson);}catch(e){}
  if(isMC){const f=r.factors||[];if(f.length){h+='<h3>Complexity drivers</h3><ul class="facts">'+f.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>';}
   const opts=(D.fabric_optimizations||[]).filter(o=>o.artifact===r.artifact&&o.workspace===r.workspace);
   if(opts.length){h+='<h3>Fabric optimizations ('+opts.length+')</h3><table><tr><th>category</th><th>recommendation</th><th>feature</th><th>impact</th></tr>'+opts.map(o=>'<tr><td>'+esc(o.category)+'</td><td>'+esc(o.recommendation)+'</td><td>'+esc(o.fabric_feature)+'</td><td>'+esc(o.impact)+'</td></tr>').join('')+'</table>';}else{h+='<p class="muted">No specific optimizations flagged — near 1:1 migration.</p>';}}
+ const fest=(D.fabric_estate||{});
+ const isFabWs=('on_dedicated_capacity' in r)||('capacity_id' in r);
+ if(isFabWs&&r.id){const its=(fest.items||[]).filter(x=>x.workspace_id===r.id);
+  if(its.length){h+='<h3>Fabric items ('+its.length+')</h3><table><tr><th>name</th><th>type</th></tr>'+its.slice(0,300).map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+esc(x.type)+'</td></tr>').join('')+'</table>';}
+  else h+='<p class="muted">No items in this workspace (or item read not permitted).</p>';}
+ const isFabMix=('item_type' in r)&&('count' in r);
+ if(isFabMix){const its=(fest.items||[]).filter(x=>x.type===r.item_type);
+  if(its.length){h+='<h3>'+esc(r.item_type)+' items ('+its.length+')</h3><table><tr><th>name</th><th>workspace</th></tr>'+its.slice(0,300).map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+esc(x.workspace_name)+'</td></tr>').join('')+'</table>';}}
  document.getElementById('dc').innerHTML=h;document.getElementById('drawer').classList.add('open');document.getElementById('ov').classList.add('open');
  const eb=document.getElementById('flowExpand');if(eb)eb.onclick=()=>expandFlow(eb.dataset.pl,eb.dataset.ws);}
 function closeD(){document.getElementById('drawer').classList.remove('open');document.getElementById('ov').classList.remove('open');}
@@ -728,6 +753,7 @@ document.getElementById('dx').onclick=closeD;document.getElementById('ov').oncli
 document.getElementById('fx').onclick=()=>document.getElementById('fs').classList.remove('open');
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){const fs=document.getElementById('fs');if(fs&&fs.classList.contains('open')){fs.classList.remove('open');return;}closeD();}});
 document.querySelectorAll('tr[data-ws]').forEach(tr=>tr.onclick=()=>{detail(tr.dataset.row||'{}',tr.dataset.ws);});
+document.querySelectorAll('tr.fabrow').forEach(tr=>tr.onclick=()=>detail(tr.dataset.row||'{}',''));
 document.querySelectorAll('#pipelineops tr[data-ws]').forEach(tr=>{tr.onclick=()=>{let r={};try{r=JSON.parse(tr.dataset.row||'{}');}catch(e){}if(!r.pipeline)return;poPipeline=(poPipeline&&poPipeline.pipeline===r.pipeline&&poPipeline.workspace===r.workspace)?null:{pipeline:r.pipeline,workspace:r.workspace};pipelineOps();};});
 const SVGNS='http://www.w3.org/2000/svg';
 function node(svg,x,y,r,fill,label,onClick){const c=document.createElementNS(SVGNS,'circle');c.setAttribute('cx',x);c.setAttribute('cy',y);c.setAttribute('r',r);c.setAttribute('fill',fill);c.setAttribute('stroke','#fff');c.setAttribute('stroke-width',1.5);c.style.cursor='pointer';if(onClick)c.onclick=onClick;svg.appendChild(c);const t=document.createElementNS(SVGNS,'text');t.setAttribute('x',x);t.setAttribute('y',y-r-3);t.setAttribute('text-anchor','middle');t.setAttribute('font-size',10);t.setAttribute('fill','#222');t.textContent=label;svg.appendChild(t);}
