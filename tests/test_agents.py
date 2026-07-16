@@ -44,6 +44,8 @@ def test_dashboard(seeded):
     assert 'data-view="revspider"' not in html
     assert 'data-view="fabestate"' in html
     assert "Fabric Environment Audit" in html
+    assert 'data-view="dflineage"' in html
+    assert "Dataflow Lineage" in html
 
 
 def test_dashboard_notebook_modernization(seeded):
