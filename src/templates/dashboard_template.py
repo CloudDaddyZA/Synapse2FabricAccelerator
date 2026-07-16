@@ -596,7 +596,7 @@ def render_dashboard(data: dict[str, Any]) -> str:
             '<span style="color:#c0392b;font-weight:600">\u2014write\u2192</span> '
             '<span style="color:#7b1fa2;font-weight:600">\u25cf Notebook/View</span> or '
             '<span style="color:#b03060;font-weight:600">\u25cf Sink table</span>. '
-            'Nodes flow left\u2192right in execution order; click any data flow to focus its full upstream/downstream chain (or click a node for details). This is the lineage you must reproduce with Dataflow Gen2 / pipelines in Fabric.</p>'
+            'Nodes flow left\u2192right in execution order; <b>click any node</b> \u2014 a source table, data flow, or notebook/view \u2014 to focus its full upstream/downstream chain and open its details (use <b>Clear filter</b> to reset). This is the lineage you must reproduce with Dataflow Gen2 / pipelines in Fabric.</p>'
             '<div class="lin-ctrl"><input id="dfl_q" type="search" placeholder="Filter by data flow or table name\u2026" oninput="dfLineage()">'
             '<select id="dfl_pick" onchange="dflOnPick(this)" style="padding:.32rem;border:1px solid #ccc;border-radius:4px;max-width:280px"><option value="">All data flows</option></select>'
             '<button class="xbtn" id="dflOrphanBtn">Show unlinked</button> <button class="xbtn" id="dflClearBtn" style="display:none">\u2190 Clear filter</button> <span class="muted" id="dflNote"></span></div>'
@@ -894,7 +894,7 @@ function objDep(){const svg=document.getElementById('objSvg');if(!svg)return;con
  svg.setAttribute('viewBox','0 0 1540 '+H);svg.setAttribute('height',H);svg.innerHTML=heads+e+n;_objNodes=nodes;
  svg.querySelectorAll('[data-oi]').forEach(g=>g.onclick=()=>{const nd=_objNodes[+g.getAttribute('data-oi')];if(nd.key===objFocus){if(nd.type==='trig')trigDetail({type:'trig',label:nd.label,ws:nd.ws,data:nd.data});else detail(JSON.stringify(nd.data),nd.ws);}else{objFocus=nd.key;objDep();}});}
 (function(){const ob=document.getElementById('objOrphanBtn');if(ob)ob.onclick=()=>{showObjOrphans=!showObjOrphans;ob.textContent=showObjOrphans?'Hide unlinked':'Show unlinked';objDep();};const cb=document.getElementById('objClearBtn');if(cb)cb.onclick=()=>{objFocus=null;objDep();};})();
-let showDflOrphans=false,_dflNodes=[],dflPickKey='',_dflGraph={key:null};
+let showDflOrphans=false,_dflNodes=[],dflFocus='',_dflGraph={key:null};
 function dflPopulate(){const sel=document.getElementById('dfl_pick');if(!sel)return;const a=active();
  const multi=a.length>1;
  const keys=(D.dataflows||[]).filter(d=>a.includes(d.workspace)).map(d=>d.workspace+'|'+d.name)
@@ -902,8 +902,8 @@ function dflPopulate(){const sel=document.getElementById('dfl_pick');if(!sel)ret
  const cur=sel.value;
  sel.innerHTML='<option value="">All data flows ('+keys.length+')</option>'+keys.map(k=>{const p=k.split('|');
   const lbl=multi?p[1]+'  ('+p[0]+')':p[1];return '<option value="'+att(k)+'">'+esc(lbl)+'</option>';}).join('');
- if(keys.includes(cur)){sel.value=cur;}else{sel.value='';dflPickKey='';}}
-function dflOnPick(sel){dflPickKey=sel.value;dfLineage();}
+ if(keys.includes(cur)){sel.value=cur;}else{sel.value='';if(dflFocus.slice(0,3)==='df|')dflFocus='';}}
+function dflOnPick(sel){dflFocus=sel.value?'df|'+sel.value:'';dfLineage();}
 const _dflNorm=p=>{let s=(p||'').toLowerCase();while(s.length&&(s.slice(-1)==='*'||s.slice(-1)==='/'))s=s.slice(0,-1);while(s.length&&s.charAt(0)==='/')s=s.slice(1);return s;};
 function _dflBuild(a){
  // Build the full lineage graph for the active workspaces (cached by workspace set).
@@ -914,7 +914,7 @@ function _dflBuild(a){
  const nbCode=(D.notebooks||[]).filter(x=>a.includes(x.workspace)).map(x=>({nb:x,code:((x.code_preview||'')+' '+(x.name||'')).toLowerCase()}));
  const nbFor=k=>{const seg=k.split('/').slice(1).join('/');if(!seg||seg.length<6)return[];return nbCode.filter(o=>o.code.includes(seg)).map(o=>o.nb);};
  const nodes=[],nidx={},edges=[];
- const mk=(key,make)=>{if(nidx[key]!=null)return nidx[key];const i=nodes.length;nidx[key]=i;nodes.push(make());return i;};
+ const mk=(key,make)=>{if(nidx[key]!=null)return nidx[key];const i=nodes.length;nidx[key]=i;const nd=make();nd.key=key;nodes.push(nd);return i;};
  const dfN=d=>mk('df|'+d.workspace+'|'+d.name,()=>({type:'df',ws:d.workspace,label:d.name,data:d,deg:0}));
  const pathN=p=>mk('p|'+_dflNorm(p),()=>({type:'path',ws:'',label:p.split('/').slice(-2).join('/')||p,full:p,data:{name:p,physical_path:p},deg:0}));
  const nbN=nb=>mk('nb|'+nb.workspace+'|'+nb.name,()=>({type:'nb',ws:nb.workspace,label:nb.name,data:nb,deg:0}));
@@ -935,7 +935,7 @@ function dfLineage(){const svg=document.getElementById('dflSvg');if(!svg)return;
  const boxW=190,boxH=22,rowH=28,padT=48,colGap=290,CAP=60;
  const qEl=document.getElementById('dfl_q');const q=(qEl?qEl.value:'').trim().toLowerCase();
  let show;
- if(dflPickKey&&nidx['df|'+dflPickKey]!=null){const s0=nidx['df|'+dflPickKey];const reach=new Set([s0]);
+ if(dflFocus&&nidx[dflFocus]!=null){const s0=nidx[dflFocus];const reach=new Set([s0]);
   let st=[s0];while(st.length){const c=st.pop();(out[c]||[]).forEach(j=>{if(!reach.has(j)){reach.add(j);st.push(j);}});}
   st=[s0];while(st.length){const c=st.pop();(inn[c]||[]).forEach(j=>{if(!reach.has(j)){reach.add(j);st.push(j);}});}
   show=[...reach];}
@@ -952,17 +952,18 @@ function dfLineage(){const svg=document.getElementById('dflSvg');if(!svg)return;
  const ndf=show.filter(i=>nodes[i].shown&&nodes[i].type==='df').length;
  let shownEdges=0;edges.forEach(p=>{if(nodes[p[0]].shown&&nodes[p[1]].shown)shownEdges++;});
  const note=document.getElementById('dflNote');
- const clr=document.getElementById('dflClearBtn');if(clr)clr.style.display=dflPickKey?'':'none';
- const psel=document.getElementById('dfl_pick');if(psel&&psel.value!==dflPickKey){for(let i=0;i<psel.options.length;i++){if(psel.options[i].value===dflPickKey){psel.value=dflPickKey;break;}}}
- if(note)note.textContent=ndf+' data flow(s) \u00b7 '+shownEdges+' link(s) \u00b7 '+(maxLvl+1)+' stage(s)'+(capped?' \u00b7 '+capped+' capped':'')+(dflPickKey?' \u00b7 chain: '+dflPickKey.split('|')[1]:'')+(q?' \u00b7 filter \u201c'+q+'\u201d':'')+(!dflPickKey&&!q&&!showDflOrphans?' \u00b7 unlinked hidden':'');
+ const clr=document.getElementById('dflClearBtn');if(clr)clr.style.display=dflFocus?'':'none';
+ const psel=document.getElementById('dfl_pick');const pv=(dflFocus.slice(0,3)==='df|')?dflFocus.slice(3):'';if(psel&&psel.value!==pv){psel.value='';for(let i=0;i<psel.options.length;i++){if(psel.options[i].value===pv){psel.value=pv;break;}}}
+ const flabel=dflFocus&&nidx[dflFocus]!=null?nodes[nidx[dflFocus]].label:'';
+ if(note)note.textContent=ndf+' data flow(s) \u00b7 '+shownEdges+' link(s) \u00b7 '+(maxLvl+1)+' stage(s)'+(capped?' \u00b7 '+capped+' capped':'')+(dflFocus?' \u00b7 chain: '+flabel:'')+(q?' \u00b7 filter \u201c'+q+'\u201d':'')+(!dflFocus&&!q&&!showDflOrphans?' \u00b7 unlinked hidden':'');
  if(!ndf){svg.setAttribute('viewBox','0 0 1540 90');svg.setAttribute('height',90);svg.innerHTML='<text x="20" y="48" font-size="13" fill="#888">No data flow lineage \u2014 clear the filter, toggle unlinked, or re-run inventory (lineage is built from data flow script paths).</text>';_dflNodes=nodes;return;}
  const W=Math.max(1540,16+(maxLvl+1)*colGap+40);const maxRows=Math.max(1,...cols.map(c=>c.length));const H=Math.max(140,padT+maxRows*rowH+14);
  let e='';edges.forEach(p=>{const P=nodes[p[0]],C=nodes[p[1]];if(!P.shown||!C.shown)return;const x1=P.x+boxW,y1=P.y+boxH/2,x2=C.x,y2=C.y+boxH/2,mx=(x1+x2)/2;const col=p[2]==='r'?'#0b8a8a':'#c0392b';e+='<path d="M'+x1+' '+y1+' C'+mx+' '+y1+' '+mx+' '+y2+' '+x2+' '+y2+'" fill="none" stroke="'+col+'" stroke-width="1.3"/>';});
  const COL={df:'#5b8a3a',path:'#b03060',nb:'#7b1fa2'};
  let n='';show.forEach(i=>{const nd=nodes[i];if(!nd.shown)return;const t=nd.type==='path'?(' \u2014 '+(nd.full||'')):nd.type==='nb'?' \u2014 notebook/view':(' \u2014 '+(nd.data.dataflow_type||'MappingDataFlow')+', '+(nd.data.transformation_count||0)+' transforms');n+='<g data-di="'+i+'" style="cursor:pointer"><title>'+esc(nd.label)+esc(t)+' \u2014 click for details</title><rect x="'+nd.x+'" y="'+nd.y+'" width="'+boxW+'" height="'+boxH+'" rx="5" fill="'+COL[nd.type]+'" stroke="#fff"/><text x="'+(nd.x+8)+'" y="'+(nd.y+boxH/2+3.5)+'" font-size="10" fill="#fff" font-weight="bold" style="pointer-events:none">'+esc(trim(nd.label,28))+'</text></g>';});
  svg.setAttribute('viewBox','0 0 '+W+' '+H);svg.setAttribute('height',H);svg.innerHTML=e+n;_dflNodes=nodes;
- svg.querySelectorAll('[data-di]').forEach(g=>g.onclick=()=>{const nd=_dflNodes[+g.getAttribute('data-di')];if(nd.type==='df'){dflPickKey=nd.ws+'|'+nd.label;dfLineage();}detail(JSON.stringify(nd.data),nd.ws);});}
-(function(){const ob=document.getElementById('dflOrphanBtn');if(ob)ob.onclick=()=>{showDflOrphans=!showDflOrphans;ob.textContent=showDflOrphans?'Hide unlinked':'Show unlinked';dfLineage();};const cb=document.getElementById('dflClearBtn');if(cb)cb.onclick=()=>{dflPickKey='';const s=document.getElementById('dfl_pick');if(s)s.value='';const q=document.getElementById('dfl_q');if(q)q.value='';dfLineage();};})();
+ svg.querySelectorAll('[data-di]').forEach(g=>g.onclick=()=>{const nd=_dflNodes[+g.getAttribute('data-di')];dflFocus=nd.key;dfLineage();detail(JSON.stringify(nd.data),nd.ws);});}
+(function(){const ob=document.getElementById('dflOrphanBtn');if(ob)ob.onclick=()=>{showDflOrphans=!showDflOrphans;ob.textContent=showDflOrphans?'Hide unlinked':'Show unlinked';dfLineage();};const cb=document.getElementById('dflClearBtn');if(cb)cb.onclick=()=>{dflFocus='';const s=document.getElementById('dfl_pick');if(s)s.value='';const q=document.getElementById('dfl_q');if(q)q.value='';dfLineage();};})();
 let _linRows=[],_linFiltered=[],linType='All';
 const _LICON={trig:'\u23f0',pipe:'\u25b7',nb:'\U0001F4D3',df:'\U0001F500'};
 function lineageRows(){const L=buildLineage();const a=active();const rows=[];
