@@ -595,7 +595,7 @@ def render_dashboard(data: dict[str, Any]) -> str:
             'Each dataset node carries its physical table/path; click any node for details. This is the lineage you must reproduce with Dataflow Gen2 / pipelines in Fabric.</p>'
             '<div class="lin-ctrl"><input id="dfl_q" type="search" placeholder="Filter by data flow or table name\u2026" oninput="dfLineage()">'
             '<select id="dfl_pick" onchange="dflOnPick(this)" style="padding:.32rem;border:1px solid #ccc;border-radius:4px;max-width:280px"><option value="">All data flows</option></select>'
-            '<button class="xbtn" id="dflOrphanBtn">Show unlinked</button> <span class="muted" id="dflNote"></span></div>'
+            '<button class="xbtn" id="dflOrphanBtn">Show unlinked</button> <button class="xbtn" id="dflClearBtn" style="display:none">\u2190 Clear filter</button> <span class="muted" id="dflNote"></span></div>'
             '<svg id="dflSvg" width="100%" height="360" viewBox="0 0 1540 360" preserveAspectRatio="xMinYMin meet"></svg></div></div>',
         "lineage": '<div class="grid"><div class="card" style="grid-column:1/-1">'
             '<h3>Dependency &amp; Lineage Explorer</h3>'
@@ -921,6 +921,8 @@ function dfLineage(){const svg=document.getElementById('dflSvg');if(!svg)return;
   colNodes[ci].forEach((i,si)=>{nodes[i].x=colX[ci];nodes[i].y=padT+si*rowH;nodes[i].shown=true;});});
  let shownEdges=0;edges.forEach(p=>{if(nodes[p[0]].shown&&nodes[p[1]].shown)shownEdges++;});
  const note=document.getElementById('dflNote');
+ const clr=document.getElementById('dflClearBtn');if(clr)clr.style.display=dflPickKey?'':'none';
+ const psel=document.getElementById('dfl_pick');if(psel&&psel.value!==dflPickKey){for(let i=0;i<psel.options.length;i++){if(psel.options[i].value===dflPickKey){psel.value=dflPickKey;break;}}}
  if(note)note.textContent=colNodes[1].length+' data flow(s) \u00b7 '+shownEdges+' link(s)'+(capped?' \u00b7 '+capped+' capped ('+CAP+'/col)':'')+(dflPickKey?' \u00b7 selected: '+dflPickKey.split('|')[1]:'')+(q?' \u00b7 filter \u201c'+q+'\u201d':'')+(!showDflOrphans?' \u00b7 unlinked hidden':'');
  if(!colNodes[1].length){svg.setAttribute('viewBox','0 0 1540 90');svg.setAttribute('height',90);svg.innerHTML='<text x="20" y="48" font-size="13" fill="#888">No data flow lineage \u2014 clear the filter, toggle unlinked, or run inventory with read access (data flows need resolved source/sink datasets).</text>';_dflNodes=nodes;return;}
  const maxRows=Math.max(1,colNodes[0].length,colNodes[1].length,colNodes[2].length);const H=Math.max(140,padT+maxRows*rowH+14);
@@ -930,8 +932,8 @@ function dfLineage(){const svg=document.getElementById('dflSvg');if(!svg)return;
  const HD=['Source tables','Data flows','Sink tables'],HC=[COL.ds,COL.df,COL.ds];
  const heads=HD.map((t,ci)=>'<text x="'+colX[ci]+'" y="26" font-size="11.5" font-weight="bold" fill="'+HC[ci]+'">'+t+'</text>').join('');
  svg.setAttribute('viewBox','0 0 1540 '+H);svg.setAttribute('height',H);svg.innerHTML=heads+e+n;_dflNodes=nodes;
- svg.querySelectorAll('[data-di]').forEach(g=>g.onclick=()=>{const nd=_dflNodes[+g.getAttribute('data-di')];detail(JSON.stringify(nd.data),nd.ws);});}
-(function(){const ob=document.getElementById('dflOrphanBtn');if(ob)ob.onclick=()=>{showDflOrphans=!showDflOrphans;ob.textContent=showDflOrphans?'Hide unlinked':'Show unlinked';dfLineage();};})();
+ svg.querySelectorAll('[data-di]').forEach(g=>g.onclick=()=>{const nd=_dflNodes[+g.getAttribute('data-di')];if(nd.type==='df'){dflPickKey=nd.ws+'|'+nd.label;dfLineage();}detail(JSON.stringify(nd.data),nd.ws);});}
+(function(){const ob=document.getElementById('dflOrphanBtn');if(ob)ob.onclick=()=>{showDflOrphans=!showDflOrphans;ob.textContent=showDflOrphans?'Hide unlinked':'Show unlinked';dfLineage();};const cb=document.getElementById('dflClearBtn');if(cb)cb.onclick=()=>{dflPickKey='';const s=document.getElementById('dfl_pick');if(s)s.value='';const q=document.getElementById('dfl_q');if(q)q.value='';dfLineage();};})();
 let _linRows=[],_linFiltered=[],linType='All';
 const _LICON={trig:'\u23f0',pipe:'\u25b7',nb:'\U0001F4D3',df:'\U0001F500'};
 function lineageRows(){const L=buildLineage();const a=active();const rows=[];
