@@ -179,6 +179,8 @@ class Dataflow(BaseModel):
     dataset_refs: list[str] = Field(default_factory=list)
     source_datasets: list[str] = Field(default_factory=list)  # datasets/tables read (source transforms)
     sink_datasets: list[str] = Field(default_factory=list)    # datasets/tables written (sink transforms)
+    source_paths: list[str] = Field(default_factory=list)     # physical read paths from the script (fileSystem/folder)
+    sink_paths: list[str] = Field(default_factory=list)       # physical write paths from the script (fileSystem/folder)
     parameter_count: int = 0
     script_line_count: int = 0
     folder: str = ""

@@ -440,6 +440,7 @@ class InventoryAgent(BaseAgent):
             transforms = tp.get("transformations", []) or []
             script = "\n".join(tp.get("scriptLines", []) or [])
             ttypes = sorted({t for t in self._DF_TRANSFORMS if re.search(rf"\b{t}\s*\(", script)})
+            src_paths, sink_paths = self._dataflow_script_paths(tp.get("scriptLines", []) or [])
             ds_refs, ls_refs, src_ds, sink_ds = [], [], [], []
             for items, bucket in ((sources, src_ds), (sinks, sink_ds)):
                 for s in items:
@@ -464,11 +465,71 @@ class InventoryAgent(BaseAgent):
                 dataset_refs=sorted(set(ds_refs)),
                 source_datasets=sorted(set(src_ds)),
                 sink_datasets=sorted(set(sink_ds)),
+                source_paths=src_paths,
+                sink_paths=sink_paths,
                 parameter_count=len(p.get("parameters", {}) or {}),
                 script_line_count=len(tp.get("scriptLines", []) or []),
                 folder=(p.get("folder") or {}).get("name", ""),
             ))
         return out
+
+    # Regexes for extracting physical storage paths from a Mapping Data Flow
+    # script (ADF/Synapse dataflow DSL). Sources use wildcardPaths, sinks use
+    # folderPath; both carry a fileSystem (container) and optional fileName.
+    _RE_FS = re.compile(r"fileSystem:\s*'([^']*)'")
+    _RE_FOLDER = re.compile(r"folderPath:\s*'([^']*)'")
+    _RE_WILD = re.compile(r"wildcardPaths:\s*\[\s*'([^']*)'")
+    _RE_FILE = re.compile(r"fileName:\s*'([^']*)'")
+
+    @staticmethod
+    def _dataflow_script_paths(script_lines: list[str]) -> tuple[list[str], list[str]]:
+        """Extract physical read/write folder paths from a data flow script.
+
+        Walks the DSL line by line, tracking whether the current block is a
+        ``source(`` or ``sink(``; captures its ``fileSystem`` + folder
+        (``folderPath`` or ``wildcardPaths``) + optional ``fileName``, and closes
+        the block on ``~> StreamName``. Returns (source_paths, sink_paths) as
+        ``fileSystem/folder`` strings (wildcards stripped) for lineage matching.
+        """
+        src: list[str] = []
+        snk: list[str] = []
+        cur: dict[str, str] = {"t": "", "fs": "", "folder": "", "file": ""}
+
+        def close() -> None:
+            if not cur["t"]:
+                return
+            folder = cur["folder"].strip("/").rstrip("*").strip("/")
+            parts = [x for x in (cur["fs"].strip("/"), folder, cur["file"].strip("/")) if x]
+            if parts:
+                (src if cur["t"] == "source" else snk).append("/".join(parts))
+
+        for raw in script_lines:
+            s = raw.strip()
+            low = s.lower()
+            if low.startswith("source("):
+                close()
+                cur = {"t": "source", "fs": "", "folder": "", "file": ""}
+            elif low.startswith("sink(") or " sink(" in low:
+                close()
+                cur = {"t": "sink", "fs": "", "folder": "", "file": ""}
+            if cur["t"]:
+                m = InventoryAgent._RE_FS.search(s)
+                if m:
+                    cur["fs"] = m.group(1)
+                m = InventoryAgent._RE_FOLDER.search(s)
+                if m:
+                    cur["folder"] = m.group(1)
+                m = InventoryAgent._RE_WILD.search(s)
+                if m and not cur["folder"]:
+                    cur["folder"] = m.group(1)
+                m = InventoryAgent._RE_FILE.search(s)
+                if m:
+                    cur["file"] = m.group(1)
+            if "~>" in s and cur["t"]:
+                close()
+                cur = {"t": "", "fs": "", "folder": "", "file": ""}
+        close()
+        return sorted(set(src)), sorted(set(snk))
 
     def _irs(self, ws, rest) -> list[IntegrationRuntime]:
         out = []
