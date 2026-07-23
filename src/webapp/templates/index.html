@@ -5,6 +5,7 @@
     <h2>Run pipeline</h2>
     <p class="muted">Run the full estate audit, or a single stage. Stages run in order.</p>
     <button class="primary" onclick="run('run-all')">▶ Run all</button>
+    <button class="danger" id="cancelBtn" onclick="cancelJob()" style="display:none">■ Cancel</button>
     <div class="agents">
       {% for a in agents %}
       <button onclick="run('{{ a }}')">{{ a }}</button>
@@ -81,10 +82,16 @@
 </div>
 
 <script>
-const STEP_ICON = {pending:'○', running:'◐', success:'✓', error:'✕'};
+const STEP_ICON = {pending:'○', running:'◐', success:'✓', error:'✕', cancelled:'⊘'};
 async function run(target){
   const r = await fetch('/run/'+target, {method:'POST'});
   if(r.status===409){alert('A job is already running');return;}
+  poll();
+}
+async function cancelJob(){
+  const btn = document.getElementById('cancelBtn');
+  const r = await fetch('/cancel', {method:'POST'});
+  if(r.ok){ btn.disabled = true; btn.textContent = 'Cancelling…'; }
   poll();
 }
 function renderSteps(steps){
@@ -104,6 +111,8 @@ async function poll(){
   const s = await (await fetch('/status')).json();
   document.getElementById('state').textContent = s.status;
   document.getElementById('state').className = 'badge ' + s.status;
+  const cbtn = document.getElementById('cancelBtn');
+  if(cbtn){ if(s.status==='running'){ cbtn.style.display=''; } else { cbtn.style.display='none'; cbtn.disabled=false; cbtn.textContent='■ Cancel'; } }
   document.getElementById('job').textContent = s.name !== 'none' ? '('+s.name+')' : '';
   document.getElementById('elapsed').textContent = s.elapsed ? s.elapsed+'s' : '';
   renderSteps(s.steps);

@@ -20,6 +20,13 @@ def test_status_and_invalid_run():
     assert client.post("/run/bogus").status_code == 404
 
 
+def test_cancel_when_idle():
+    app = create_app(None)
+    client = app.test_client()
+    # No job running -> cancel is a no-op with 409.
+    assert client.post("/cancel").status_code == 409
+
+
 def test_file_traversal_blocked():
     app = create_app(None)
     client = app.test_client()

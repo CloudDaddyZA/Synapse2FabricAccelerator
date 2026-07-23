@@ -12,6 +12,9 @@ main{padding:2rem;max-width:1100px;margin:0 auto}
 button{background:#eef1f6;border:1px solid #cdd6e3;border-radius:6px;padding:.5rem .9rem;margin:.2rem;cursor:pointer;font-size:.9rem}
 button:hover{background:#e1e7f0}
 button.primary{background:var(--brand);color:#fff;border:none}
+button.danger{background:#b00020;color:#fff;border:none}
+button.danger:hover{background:#8a0019}
+button:disabled{opacity:.6;cursor:default}
 .agents{margin:1rem 0}
 .scope{font-size:.85rem;color:var(--mut);margin-top:1rem}
 .wsel{margin:1rem 0;border:1px solid #e1e7f0;border-radius:8px;padding:.8rem}
@@ -26,6 +29,7 @@ button.primary{background:var(--brand);color:#fff;border:none}
 .badge{padding:.1rem .6rem;border-radius:12px;font-size:.8rem}
 .badge.idle{background:#ccc}.badge.running{background:#f0ad4e;color:#fff}
 .badge.success{background:#28a745;color:#fff}.badge.error{background:#b00020;color:#fff}
+.badge.cancelled{background:#6c757d;color:#fff}
 .result{margin-top:.8rem;font-family:monospace;font-size:.85rem}
 .steps{margin:.8rem 0;display:flex;flex-direction:column;gap:.55rem}
 .step-head{display:flex;align-items:center;gap:.5rem;font-size:.85rem;margin-bottom:.2rem}
@@ -41,6 +45,7 @@ button.primary{background:var(--brand);color:#fff;border:none}
 .step.success .step-icon{color:#28a745}
 .step.error .step-icon{color:#b00020}
 .step.pending{opacity:.55}
+.step.cancelled{opacity:.7}.step.cancelled .bar span{background:#6c757d}.step.cancelled .step-icon{color:#6c757d}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 .field{margin:.6rem 0;display:flex;flex-direction:column}
 .field label{font-weight:600;font-size:.85rem;margin-bottom:.2rem}

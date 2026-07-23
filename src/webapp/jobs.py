@@ -37,7 +37,7 @@ PIPELINE_ORDER = ["discover", "inventory", "assess", "migrate", "fabric-audit", 
 @dataclass
 class Step:
     name: str
-    status: str = "pending"  # pending | running | success | error
+    status: str = "pending"  # pending | running | success | error | cancelled
     started: float | None = None
     finished: float | None = None
 
@@ -45,13 +45,14 @@ class Step:
 @dataclass
 class Job:
     name: str
-    status: str = "idle"  # idle | running | success | error
+    status: str = "idle"  # idle | running | success | error | cancelled
     logs: list[str] = field(default_factory=list)
     result: dict | None = None
     error: str | None = None
     started: float | None = None
     finished: float | None = None
     steps: list[Step] = field(default_factory=list)
+    cancelled: bool = False
 
 
 class _ListHandler(logging.Handler):
@@ -90,11 +91,24 @@ class JobRunner:
         threading.Thread(target=self._run, args=(target,), daemon=True).start()
         return True
 
+    def cancel(self) -> bool:
+        """Request cancellation. Cooperative: stops before the next stage (a stage
+        already running finishes first). Returns False if no job is running."""
+        with self._lock:
+            if not self.busy:
+                return False
+            self.job.cancelled = True
+            self.job.logs.append("Cancellation requested \u2014 stopping after the current stage.")
+            return True
+
     def _run(self, target: str) -> None:
         handler = _ListHandler(self.job)
         handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s", "%H:%M:%S"))
         try:
             for step in self.job.steps:
+                if self.job.cancelled:
+                    step.status = "cancelled"
+                    continue
                 logger = logging.getLogger(step.name)
                 logger.addHandler(handler)
                 step.status = "running"
@@ -109,7 +123,7 @@ class JobRunner:
                 finally:
                     step.finished = time.time()
                     logger.removeHandler(handler)
-            self.job.status = "success"
+            self.job.status = "cancelled" if self.job.cancelled else "success"
         except Exception as exc:  # noqa: BLE001
             self.job.status = "error"
             self.job.error = f"{type(exc).__name__}: {exc}"

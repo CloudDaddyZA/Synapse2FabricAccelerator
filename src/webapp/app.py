@@ -107,6 +107,12 @@ def create_app(config_path: str | None = None) -> Flask:
             return jsonify({"ok": False, "msg": "A job is already running"}), 409
         return jsonify({"ok": True})
 
+    @app.post("/cancel")
+    def cancel():
+        if runner.cancel():
+            return jsonify({"ok": True})
+        return jsonify({"ok": False, "msg": "No job is running"}), 409
+
     @app.get("/workspaces")
     def workspaces():
         settings = load_settings(config_path)
