@@ -54,7 +54,7 @@ It runs read-only against your Synapse environment, produces consultant-ready de
 - **Offline HTML dashboard** — fully self-contained (inline SVG charts, no CDN), with workspace filtering, drill-down drawers, pipeline-flow diagrams (expandable to full screen), pipeline run analytics, a grouped **Fabric** menu (Fabric Readiness with a **delivery-team & timeline planner**, a **Fabric Environment Audit** that validates the target estate — capacity sizing, region, coverage, **workspace access controls / RBAC**, and a **threat / security posture (STRIDE)** scan — a **Fabric Architecture** topology graph (capacity → workspace → item type, click any node for details), a **Deploy to Fabric** view that links straight to the FDFMA with per-workspace ARM templates and upload steps, and a **Notebook Modernization** view surfacing the Fabric Notebook Modernizer results), and a grouped **Diagrams** menu (Workspace, Trigger Dependency, Object Dependency, **Dataflow Lineage** — a multi-hop data lineage that chains the original Synapse data flows by their physical read/write paths, from source tables through intermediate flows to the notebooks/views that consume them; every node is clickable to focus its full upstream/downstream chain and open its details — and Lineage views).
 - **Power BI** — a ready-to-open `.pbip` project plus CSV datasets and a model guide.
 - **Copilot optimization pack** — review prompts for VS Code (no Copilot API calls are made by this tool).
-- **Web UI** — configure connection, pick workspaces to scan, run any stage or the full pipeline with live logs, and browse/download every output.
+- **Web UI** — configure connection, pick workspaces to scan, scope & map the Fabric audit (source→target workspace mapping), run any stage or the full pipeline with live logs, cancel a running pipeline, and browse/download every output.
 - **Resilient by design** — retry with backoff, graceful partial failure, per-artifact error capture, and access-status tracking per workspace.
 
 ---
@@ -120,7 +120,8 @@ Open http://127.0.0.1:8050 to:
 
 - **Configure** the Azure connection and assessment toggles (saved to `config/settings.yaml`).
 - **Pick workspaces to scan** — a checkbox grid populated from discovery; leaving all selected scans everything.
-- **Run** any single stage or the full pipeline with **live progress bars and logs** per agent.
+- **Scope the Fabric audit** — select which Fabric workspaces and capacities to deeply audit, and **map each source Synapse workspace to its target Fabric workspace** (overrides the automatic name match used by the migration-coverage check). Scope options always list the full estate, so unselecting a subset never hides the rest.
+- **Run** any single stage or the full pipeline with **live progress bars and logs** per agent, and **Cancel** a running pipeline (it stops after the current stage; remaining stages are marked cancelled).
 - **Browse and download** every generated output, including the dashboard.
 
 Credentials stay in `.env`; the UI never stores secrets.

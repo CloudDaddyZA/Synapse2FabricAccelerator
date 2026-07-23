@@ -11,7 +11,7 @@ The accelerator is a small, modular Python package. Each subpackage has a single
 | `exporters/` | Output writers: JSON, CSV, Excel, Markdown→HTML, and the Power BI `.pbip` generator. |
 | `templates/` | The self-contained HTML dashboard template (inline SVG charts and JS). |
 | `utils/` | Cross-cutting helpers: config loading, logging setup, retry/backoff, and scoring math. |
-| `webapp/` | Flask web UI: configuration, workspace selection, background job runner, and output browser. |
+| `webapp/` | Flask web UI: configuration, workspace selection, Fabric audit scope + source→target workspace mapping, cancellable background job runner, and output browser. |
 
 ## `models/`
 
@@ -40,8 +40,8 @@ The accelerator is a small, modular Python package. Each subpackage has a single
 
 ## `webapp/`
 
-- `app.py` — Flask routes (config, `/workspaces`, run triggers, `/status`, output browser).
-- `jobs.py` — background job runner with per-step progress.
+- `app.py` — Flask routes (config, `/workspaces`, `/fabric-scope`, `/fabric-map`, run triggers, `/cancel`, `/status`, output browser).
+- `jobs.py` — cancellable background job runner with per-step progress (cooperative cancel stops after the current stage).
 - `auth.py` — UI-side helpers for connection settings.
 
-Run via `python -m src.cli serve` or `python -m src.webapp` (http://127.0.0.1:8050).
+Run via `python -m src.cli serve` or `python -m src.webapp` (http://127.0.0.1:8050). The Run page also exposes a **Fabric audit scope** picker (workspaces + capacities) and a **Source → target workspace mapping** editor; scope options always list the full discovered estate so unselecting a subset never hides the rest.
