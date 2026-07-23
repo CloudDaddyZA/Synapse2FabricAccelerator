@@ -61,6 +61,18 @@
   </section>
 
   <section class="card">
+    <h2>Source → target workspace mapping</h2>
+    <p class="muted">Map each source Synapse workspace to its destination Fabric workspace. This overrides the
+      automatic name match used by the migration-coverage check. Leave a row on <em>Auto</em> to keep name matching.
+      Re-run <strong>fabric-audit</strong> after mapping to refresh coverage. Populates after discovery + a fabric-audit run.</p>
+    <div class="wsel-actions">
+      <button type="button" onclick="loadFabricMap()">↻ Reload</button>
+      <span id="fabmap-saved" class="muted"></span>
+    </div>
+    <div id="fabmap-list" class="wsel-list"></div>
+  </section>
+
+  <section class="card">
     <h2>Status: <span id="state" class="badge idle">idle</span> <span id="job"></span> <span id="elapsed" class="muted"></span></h2>
     <div id="steps" class="steps"></div>
     <pre id="logs" class="logs">No job started yet.</pre>
@@ -230,5 +242,50 @@ function saveFabricScope(){
   }, 400);
 }
 loadFabricScope();
+
+// ---- Source → target workspace mapping ----
+let MAP_TARGETS = [];
+async function loadFabricMap(){
+  const d = await (await fetch('/fabric-map')).json();
+  MAP_TARGETS = d.targets || [];
+  const sources = d.sources || [];
+  const mapping = d.mapping || {};
+  const list = document.getElementById('fabmap-list');
+  if(!sources.length){
+    list.innerHTML = '<span class="muted">No source workspaces discovered yet — run discover / Re-scan Azure.</span>';
+    return;
+  }
+  const opts = t => MAP_TARGETS.map(w => {
+    const s = w.replace(/"/g, '&quot;');
+    return `<option value="${s}"${w===t?' selected':''}>${s}</option>`;
+  }).join('');
+  list.innerHTML = sources.map(src => {
+    const cur = mapping[src] || '';
+    const s = src.replace(/"/g, '&quot;');
+    return `<div class="wsel-item" style="display:flex;align-items:center;gap:.6rem;justify-content:space-between">
+      <span title="${s}">${s}</span>
+      <select data-src="${s}" onchange="saveFabricMap()" style="padding:.3rem;border:1px solid #ccc;border-radius:4px;max-width:260px">
+        <option value=""${cur?'':' selected'}>— Auto (name match) —</option>${opts(cur)}
+      </select></div>`;
+  }).join('');
+}
+let _mapTimer;
+function saveFabricMap(){
+  clearTimeout(_mapTimer);
+  _mapTimer = setTimeout(async () => {
+    const mapping = {};
+    document.querySelectorAll('#fabmap-list select[data-src]').forEach(s => {
+      if(s.value) mapping[s.dataset.src] = s.value;
+    });
+    const el = document.getElementById('fabmap-saved');
+    const r = await fetch('/fabric-map', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({mapping}),
+    });
+    if(r.ok){ el.textContent = 'Saved ✓ — re-run fabric-audit to refresh coverage'; setTimeout(() => el.textContent = '', 2500); }
+    else { el.textContent = 'Save failed'; }
+  }, 400);
+}
+loadFabricMap();
 </script>
 {% endblock %}

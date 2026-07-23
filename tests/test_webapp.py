@@ -77,3 +77,26 @@ def test_fabric_scope_selection(tmp_path):
     saved = yaml.safe_load(cfg.read_text(encoding="utf-8"))
     assert saved["fabric_workspace_names"] == ["fw-a"]
     assert saved["fabric_capacity_names"] == ["cap-1"]
+
+
+def test_fabric_workspace_map(tmp_path):
+    out = tmp_path / "out"
+    (out / "discovery").mkdir(parents=True)
+    (out / "discovery" / "workspaces.json").write_text(
+        '[{"name": "synw-src"}]', encoding="utf-8")
+    (out / "fabric_audit").mkdir(parents=True)
+    (out / "fabric_audit" / "fabric_estate.json").write_text(
+        '{"workspaces": [{"name": "fw-a"}, {"name": "fw-b"}], "capacities": []}', encoding="utf-8")
+    cfg = tmp_path / "settings.yaml"
+    cfg.write_text(yaml.safe_dump({"output_path": str(out)}), encoding="utf-8")
+    client = create_app(str(cfg)).test_client()
+
+    body = client.get("/fabric-map").get_json()
+    assert body["sources"] == ["synw-src"]
+    assert sorted(body["targets"]) == ["fw-a", "fw-b"]
+    assert body["mapping"] == {}
+
+    assert client.post("/fabric-map", json={"mapping": {"synw-src": "fw-b"}}).status_code == 200
+    assert client.get("/fabric-map").get_json()["mapping"] == {"synw-src": "fw-b"}
+    saved = yaml.safe_load(cfg.read_text(encoding="utf-8"))
+    assert saved["fabric_workspace_map"] == {"synw-src": "fw-b"}

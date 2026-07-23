@@ -47,6 +47,9 @@ class Settings(BaseModel):
     # audit to specific capacities / workspaces (by display name); empty = all.
     fabric_capacity_names: list[str] = Field(default_factory=list)
     fabric_workspace_names: list[str] = Field(default_factory=list)
+    # Explicit source-Synapse -> target-Fabric workspace mapping (by display name).
+    # Overrides the automatic name match used for migration coverage.
+    fabric_workspace_map: dict[str, str] = Field(default_factory=dict)
 
     # Resolved at runtime from .env, never persisted to YAML.
     client_id: str | None = Field(default=None, exclude=True)

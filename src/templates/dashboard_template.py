@@ -385,7 +385,7 @@ def _fabestate_view(data: dict[str, Any]) -> str:
     cov = rd.get("coverage") or []
     cov_rows = [{"source_workspace": r.get("source_workspace"),
                  "target_workspace": r.get("target_workspace") or "—",
-                 "matched": "yes" if r.get("matched") else "no",
+                 "matched": ("mapped" if r.get("mapped") else "auto") if r.get("matched") else "no",
                  "target_item_count": r.get("target_item_count", 0),
                  "expected_item_types": ", ".join(r.get("expected_item_types") or []) or "—",
                  "present_item_types": ", ".join(r.get("present_item_types") or []) or "—",

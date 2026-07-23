@@ -210,13 +210,21 @@ class FabricAuditAgent(BaseAgent):
     # ---- coverage / gap ---------------------------------------------------
     def _coverage(self, inv: dict, estate: FabricEstate) -> list[dict]:
         by_norm: dict[str, FabricWorkspace] = {_norm(w.name): w for w in estate.workspaces}
+        by_name: dict[str, FabricWorkspace] = {w.name: w for w in estate.workspaces}
+        # Explicit source->target mapping (case-insensitive on the source name).
+        wmap = {str(k).lower(): str(v) for k, v in (self.settings.fabric_workspace_map or {}).items()}
         items_by_ws: dict[str, set[str]] = {}
         for it in estate.items:
             items_by_ws.setdefault(it.workspace_id, set()).add(it.type)
         rows: list[dict] = []
         for w in inv.get("workspaces", []):
             src = w.get("workspace", {}).get("name", "")
-            tgt = by_norm.get(_norm(src))
+            mapped_name = wmap.get(src.lower())
+            tgt = None
+            if mapped_name:
+                tgt = by_name.get(mapped_name) or by_norm.get(_norm(mapped_name))
+            if tgt is None:
+                tgt = by_norm.get(_norm(src))
             expected = sorted({_EXPECTED_ITEM[k] for k in _EXPECTED_ITEM if w.get(k)})
             present = sorted(items_by_ws.get(tgt.id, set()) & set(expected)) if tgt else []
             missing = sorted(set(expected) - set(present))
@@ -224,6 +232,7 @@ class FabricAuditAgent(BaseAgent):
                 "source_workspace": src,
                 "target_workspace": tgt.name if tgt else "",
                 "matched": bool(tgt),
+                "mapped": bool(mapped_name),
                 "target_item_count": tgt.item_count if tgt else 0,
                 "expected_item_types": expected,
                 "present_item_types": present,

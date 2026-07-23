@@ -157,6 +157,32 @@ def create_app(config_path: str | None = None) -> Flask:
         cfg_path.write_text(yaml.safe_dump(existing, sort_keys=False), encoding="utf-8")
         return jsonify({"ok": True, "workspaces": ws, "capacities": caps})
 
+    @app.get("/fabric-map")
+    def fabric_map():
+        settings = load_settings(config_path)
+        targets, _caps = _fabric_scope(config_path)
+        return jsonify({
+            "sources": _discovered_workspaces(config_path),
+            "targets": targets,
+            "mapping": settings.fabric_workspace_map or {},
+        })
+
+    @app.post("/fabric-map")
+    def save_fabric_map():
+        payload = request.get_json(silent=True) or {}
+        mapping = payload.get("mapping", {})
+        if not isinstance(mapping, dict):
+            mapping = {}
+        clean = {str(k).strip(): str(v).strip() for k, v in mapping.items()
+                 if str(k).strip() and str(v).strip()}
+        cfg_path.parent.mkdir(parents=True, exist_ok=True)
+        existing = {}
+        if cfg_path.exists():
+            existing = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+        existing["fabric_workspace_map"] = clean
+        cfg_path.write_text(yaml.safe_dump(existing, sort_keys=False), encoding="utf-8")
+        return jsonify({"ok": True, "mapping": clean})
+
     @app.get("/status")
     def status():
         return jsonify(runner.snapshot())
