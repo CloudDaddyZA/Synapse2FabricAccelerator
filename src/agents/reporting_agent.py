@@ -197,6 +197,16 @@ class ReportingAgent(BaseAgent):
                               "yes" if r.get("matched") else "no", r.get("target_item_count", 0),
                               ", ".join(r.get("missing_item_types") or []) or "\u2014"]
                              for r in (rd.get("coverage") or [])]))
+        acc = rd.get("access_summary") or {}
+        lines.append("\n## Access controls (workspace RBAC)\n")
+        lines.append(f"Role assignments: **{acc.get('role_assignments', 0)}** across "
+                     f"**{acc.get('distinct_principals', 0)}** principals (admins: {acc.get('admin_assignments', 0)}). "
+                     f"Verifiable workspaces: **{acc.get('workspaces_verifiable', 0)}**, "
+                     f"unverifiable: {acc.get('workspaces_unverifiable', 0)}.\n")
+        lines.append(_table(["Workspace", "Principal", "Type", "Role"],
+                            [[w.get("name"), r.get("principal"), r.get("principal_type"), r.get("role")]
+                             for w in (estate.get("workspaces") or []) for r in (w.get("roles") or [])],
+                            "No role assignments readable."))
         return "\n".join(lines)
 
     def _risk_register(self, scores) -> str:

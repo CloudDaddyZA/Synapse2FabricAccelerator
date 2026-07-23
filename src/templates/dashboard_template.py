@@ -24,6 +24,7 @@ _VIEWS = [
     ("integration", "Data Integration"),
     ("fabready", "Fabric Readiness"),
     ("fabestate", "Fabric Environment Audit"),
+    ("fabarch", "Fabric Architecture"),
     ("migrate", "Deploy to Fabric"),
     ("notebooks", "Notebook Modernization"),
     ("pipelineops", "Pipeline Ops"),
@@ -38,7 +39,7 @@ _VIEWS = [
 _DIAGRAM_KEYS = ("spider", "trigspider", "objdep", "dflineage", "lineage")
 
 # Fabric migration views grouped under the "Fabric" dropdown in the top nav.
-_FABRIC_KEYS = ("fabready", "fabestate", "migrate", "notebooks")
+_FABRIC_KEYS = ("fabready", "fabestate", "fabarch", "migrate", "notebooks")
 
 
 def _nav_dropdown(dd_id: str, btn_id: str, menu_id: str, label: str,
@@ -409,8 +410,22 @@ def _fabestate_view(data: dict[str, Any]) -> str:
                    ["name", "capacity_sku", "capacity_region", "on_dedicated_capacity", "item_count"],
                    clickable=True)
 
+    # Access controls / RBAC (workspace 7727)
+    acc = rd.get("access_summary") or {}
+    acc_kpis = (
+        '<div class="card"><div class="kpi">' + str(acc.get("role_assignments", 0)) + '</div>Role assignments</div>'
+        '<div class="card"><div class="kpi">' + str(acc.get("distinct_principals", 0)) + '</div>Distinct principals</div>'
+        '<div class="card"><div class="kpi">' + str(acc.get("admin_assignments", 0)) + '</div>Admin assignments</div>'
+        '<div class="card"><div class="kpi">' + str(acc.get("workspaces_unverifiable", 0)) + '</div>Unverifiable workspaces</div>'
+    ) if acc else ''
+    role_rows = [{"workspace": w.get("name"), "principal": r.get("principal", ""),
+                  "principal_type": r.get("principal_type", ""), "role": r.get("role", "")}
+                 for w in wss for r in (w.get("roles") or [])]
+    roles_tbl = _plain_table("Access controls \u2014 workspace role assignments", role_rows,
+                             ["workspace", "principal", "principal_type", "role"], clickable=True)
+
     return ('<div class="grid">' + intro + kpis + dcard + caps_tbl
-            + findings_card + cov_tbl + ws_tbl + mix_tbl + '</div>')
+            + findings_card + cov_tbl + ws_tbl + acc_kpis + roles_tbl + mix_tbl + '</div>')
 
 
 
@@ -533,6 +548,17 @@ def render_dashboard(data: dict[str, Any]) -> str:
         "migrate": _fdfma_view(data),
         "notebooks": _modernization_view(data),
         "fabestate": _fabestate_view(data),
+        "fabarch": '<div class="grid"><div class="card" style="grid-column:1/-1">'
+            '<h3>Fabric Architecture</h3>'
+            '<p>The live topology of the target Microsoft Fabric estate: '
+            '<span style="color:#1565C0;font-weight:600">\u25cf Capacity</span> \u2192 '
+            '<span style="color:#0b8a8a;font-weight:600">\u25cf Workspace</span> \u2192 '
+            '<span style="color:#7b1fa2;font-weight:600">\u25cf Item type</span> (Lakehouse, Warehouse, Notebook, Data Pipeline, Semantic Model\u2026). '
+            'Edge width to an item type reflects how many of that item the workspace holds. Click any node for details '
+            '(a workspace lists its items; an item type lists every item of that kind). Run <code>python -m src.cli fabric-audit</code> to refresh.</p>'
+            '<div class="lin-ctrl"><input id="fabarch_q" type="search" placeholder="Filter by capacity, workspace or item type\u2026" oninput="fabArch()">'
+            '<span class="muted" id="fabarchNote"></span></div>'
+            '<svg id="fabarchSvg" width="100%" height="360" viewBox="0 0 1540 360" preserveAspectRatio="xMinYMin meet"></svg></div></div>',
         "pipelineops": '<div class="grid">'
             '<div class="card"><div class="kpi" id="po_total">0</div>Pipeline Runs</div>'
             '<div class="card"><div class="kpi" id="po_success">0%</div>Success Rate</div>'
@@ -722,7 +748,7 @@ function activateView(v){document.querySelectorAll('.tab').forEach(x=>x.classLis
  const ddi=document.querySelector('.ddi[data-view="'+v+'"]');
  if(ddi){ddi.classList.add('active');const btn=ddi.closest('.dd').querySelector('.dd-btn');if(btn)btn.classList.add('active');}
  else{const b=document.querySelector('.tab[data-view="'+v+'"]');if(b)b.classList.add('active');}
- if(v==='spider')spider();if(v==='trigspider')trigSpider();if(v==='lineage')lineageView();if(v==='pipelineops')pipelineOps();if(v==='overview')overviewCharts();if(v==='fabready')fabReady();if(v==='objdep')objDep();if(v==='dflineage'){dflPopulate();dfLineage();}}
+ if(v==='spider')spider();if(v==='trigspider')trigSpider();if(v==='lineage')lineageView();if(v==='pipelineops')pipelineOps();if(v==='overview')overviewCharts();if(v==='fabready')fabReady();if(v==='objdep')objDep();if(v==='dflineage'){dflPopulate();dfLineage();}if(v==='fabarch')fabArch();}
 document.querySelectorAll('.tab[data-view]').forEach(b=>b.onclick=()=>activateView(b.dataset.view));
 document.querySelectorAll('.ddi').forEach(b=>b.onclick=()=>{activateView(b.dataset.view);document.querySelectorAll('.dd-menu.open').forEach(m=>m.classList.remove('open'));});
 document.querySelectorAll('.dd').forEach(dd=>{const btn=dd.querySelector('.dd-btn'),menu=dd.querySelector('.dd-menu');if(btn)btn.onclick=e=>{e.stopPropagation();const wasOpen=menu.classList.contains('open');document.querySelectorAll('.dd-menu.open').forEach(m=>m.classList.remove('open'));if(!wasOpen){const r=btn.getBoundingClientRect();menu.style.top=(r.bottom+6)+'px';menu.style.right=(window.innerWidth-r.right)+'px';menu.classList.add('open');}};});
@@ -964,6 +990,40 @@ function dfLineage(){const svg=document.getElementById('dflSvg');if(!svg)return;
  svg.setAttribute('viewBox','0 0 '+W+' '+H);svg.setAttribute('height',H);svg.innerHTML=e+n;_dflNodes=nodes;
  svg.querySelectorAll('[data-di]').forEach(g=>g.onclick=()=>{const nd=_dflNodes[+g.getAttribute('data-di')];dflFocus=nd.key;dfLineage();detail(JSON.stringify(nd.data),nd.ws);});}
 (function(){const ob=document.getElementById('dflOrphanBtn');if(ob)ob.onclick=()=>{showDflOrphans=!showDflOrphans;ob.textContent=showDflOrphans?'Hide unlinked':'Show unlinked';dfLineage();};const cb=document.getElementById('dflClearBtn');if(cb)cb.onclick=()=>{dflFocus='';const s=document.getElementById('dfl_pick');if(s)s.value='';const q=document.getElementById('dfl_q');if(q)q.value='';dfLineage();};})();
+let _fabArchNodes=[];
+function fabArch(){const svg=document.getElementById('fabarchSvg');if(!svg)return;
+ const est=D.fabric_estate||{};const caps=est.capacities||[],wss=est.workspaces||[],items=est.items||[];
+ const wtCount={};items.forEach(it=>{const wk=it.workspace_id||'';(wtCount[wk]=wtCount[wk]||{});wtCount[wk][it.type]=(wtCount[wk][it.type]||0)+1;});
+ const qq=((document.getElementById('fabarch_q')||{}).value||'').trim().toLowerCase();
+ const nodes=[],nidx={},edges=[];
+ const mk=(key,make)=>{if(nidx[key]!=null)return nidx[key];const i=nodes.length;nidx[key]=i;const nd=make();nd.key=key;nodes.push(nd);return i;};
+ const capById={};caps.forEach(c=>{capById[c.id]=c;});
+ const capN=c=>mk('c|'+c.id,()=>({type:'cap',col:0,label:(c.display_name||'capacity')+' ('+(c.sku||'?')+')',data:c,deg:0}));
+ const wsN=w=>mk('w|'+w.id,()=>({type:'ws',col:1,label:w.name,data:w,deg:0}));
+ const itN=t=>mk('t|'+t,()=>({type:'it',col:2,label:t,data:{item_type:t,count:0},deg:0}));
+ wss.forEach(w=>{const wi=wsN(w);
+  if(w.capacity_id&&capById[w.capacity_id]){const ci=capN(capById[w.capacity_id]);edges.push([ci,wi,1]);nodes[ci].deg++;nodes[wi].deg++;}
+  const tc=wtCount[w.id]||{};Object.keys(tc).forEach(t=>{const ti=itN(t);nodes[ti].data.count+=tc[t];edges.push([wi,ti,tc[t]]);nodes[wi].deg++;nodes[ti].deg++;});});
+ caps.forEach(c=>capN(c));
+ let show=nodes.map((n,i)=>i);
+ if(qq){const outA={},innA={};edges.forEach(p=>{(outA[p[0]]=outA[p[0]]||[]).push(p[1]);(innA[p[1]]=innA[p[1]]||[]).push(p[0]);});
+  const match=nodes.map((n,i)=>i).filter(i=>nodes[i].label.toLowerCase().includes(qq));const keep=new Set(match);
+  match.forEach(i=>{(outA[i]||[]).forEach(j=>keep.add(j));(innA[i]||[]).forEach(j=>keep.add(j));});show=[...keep];}
+ nodes.forEach(nd=>{nd.shown=false;});
+ const colX=[16,640,1260],boxW=250,boxH=24,rowH=30,padT=44;
+ const colNodes=[[],[],[]];show.forEach(i=>colNodes[nodes[i].col].push(i));
+ colNodes.forEach((arr,ci)=>{arr.sort((x,y)=>nodes[y].deg-nodes[x].deg||nodes[x].label.localeCompare(nodes[y].label));arr.forEach((i,si)=>{nodes[i].x=colX[ci];nodes[i].y=padT+si*rowH;nodes[i].shown=true;});});
+ const maxRows=Math.max(1,colNodes[0].length,colNodes[1].length,colNodes[2].length);const H=Math.max(140,padT+maxRows*rowH+14);
+ const note=document.getElementById('fabarchNote');if(note)note.textContent=colNodes[0].length+' capacit(y/ies) \u00b7 '+colNodes[1].length+' workspace(s) \u00b7 '+colNodes[2].length+' item type(s)'+(qq?' \u00b7 filter \u201c'+qq+'\u201d':'');
+ if(!show.length){svg.setAttribute('viewBox','0 0 1540 90');svg.setAttribute('height',90);svg.innerHTML='<text x="20" y="48" font-size="13" fill="#888">No Fabric estate \u2014 run fabric-audit with access, or clear the filter.</text>';_fabArchNodes=nodes;return;}
+ let maxW=1;edges.forEach(p=>{if(p[2]>maxW)maxW=p[2];});
+ let e='';edges.forEach(p=>{const P=nodes[p[0]],C=nodes[p[1]];if(!P.shown||!C.shown)return;const x1=P.x+boxW,y1=P.y+boxH/2,x2=C.x,y2=C.y+boxH/2,mx=(x1+x2)/2;const sw=P.type==='cap'?1.4:(0.8+2.6*p[2]/maxW);e+='<path d="M'+x1+' '+y1+' C'+mx+' '+y1+' '+mx+' '+y2+' '+x2+' '+y2+'" fill="none" stroke="#b9c4d4" stroke-width="'+sw.toFixed(2)+'"/>';});
+ const COL={cap:'#1565C0',ws:'#0b8a8a',it:'#7b1fa2'};
+ let n='';show.forEach(i=>{const nd=nodes[i];if(!nd.shown)return;const cnt=nd.type==='it'?' \u2014 '+nd.data.count+' item(s)':nd.type==='ws'?' \u2014 '+(nd.data.item_count||0)+' items':nd.type==='cap'?' \u2014 '+(nd.data.state||''):'';const lbl=nd.type==='it'?nd.label+' ('+nd.data.count+')':nd.label;n+='<g data-ai="'+i+'" style="cursor:pointer"><title>'+esc(nd.label)+esc(cnt)+' \u2014 click for details</title><rect x="'+nd.x+'" y="'+nd.y+'" width="'+boxW+'" height="'+boxH+'" rx="5" fill="'+COL[nd.type]+'" stroke="#fff"/><text x="'+(nd.x+8)+'" y="'+(nd.y+boxH/2+3.5)+'" font-size="10.5" fill="#fff" font-weight="bold" style="pointer-events:none">'+esc(trim(lbl,36))+'</text></g>';});
+ const HD=['Capacities','Workspaces','Item types'],HC=[COL.cap,COL.ws,COL.it];
+ const heads=HD.map((t,ci)=>'<text x="'+colX[ci]+'" y="24" font-size="11.5" font-weight="bold" fill="'+HC[ci]+'">'+t+'</text>').join('');
+ svg.setAttribute('viewBox','0 0 1540 '+H);svg.setAttribute('height',H);svg.innerHTML=heads+e+n;_fabArchNodes=nodes;
+ svg.querySelectorAll('[data-ai]').forEach(g=>g.onclick=()=>{const nd=_fabArchNodes[+g.getAttribute('data-ai')];let dd=nd.data;if(nd.type==='ws'){dd=Object.assign({},nd.data);if(Array.isArray(dd.roles))dd.roles=dd.roles.map(r=>r.principal+' ('+r.role+')').join(', ');}else if(nd.type==='cap'){dd=Object.assign({},nd.data);if(Array.isArray(dd.admins))dd.admins=dd.admins.join(', ');}detail(JSON.stringify(dd),'');});}
 let _linRows=[],_linFiltered=[],linType='All';
 const _LICON={trig:'\u23f0',pipe:'\u25b7',nb:'\U0001F4D3',df:'\U0001F500'};
 function lineageRows(){const L=buildLineage();const a=active();const rows=[];

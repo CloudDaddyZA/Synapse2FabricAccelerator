@@ -103,3 +103,4 @@ class FabricReadinessAssessment(BaseModel):
     findings: list[CapabilityFinding] = Field(default_factory=list)
     severity_counts: dict[str, int] = Field(default_factory=dict)
     coverage: list[dict] = Field(default_factory=list)  # per source workspace -> target match + item gap
+    access_summary: dict = Field(default_factory=dict)  # RBAC posture: role/principal/admin counts

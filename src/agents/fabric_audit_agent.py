@@ -321,6 +321,9 @@ class FabricAuditAgent(BaseAgent):
                              f"{', '.join(r['missing_item_types'])}."),
                     recommendation="Create the corresponding Fabric items during migration (Lakehouse/Warehouse/Notebook/Pipeline/Dataflow Gen2)."))
 
+        # Access controls / RBAC parity (workspace 7727)
+        access_summary = self._access_findings(estate, findings)
+
         sev = _sev_counts(findings)
         if sev.get("Critical"):
             verdict = "Not ready"
@@ -334,7 +337,58 @@ class FabricAuditAgent(BaseAgent):
             verdict=verdict, demand=demand,
             largest_capacity_sku=largest.sku if largest else "",
             largest_capacity_units=largest_cu,
-            findings=findings, severity_counts=sev, coverage=coverage)
+            findings=findings, severity_counts=sev, coverage=coverage,
+            access_summary=access_summary)
+
+    # ---- access controls (RBAC) ------------------------------------------
+    @staticmethod
+    def _access_findings(estate: FabricEstate, findings: list[CapabilityFinding]) -> dict:
+        """Assess whether workspace access controls are appropriate (least privilege,
+        admin coverage, no unverifiable/guest access). Appends Access findings and
+        returns a summary."""
+        real_ws = [w for w in estate.workspaces if str(w.type).lower() in ("workspace", "")]
+        total_roles = distinct = admins_total = verifiable = unverifiable = 0
+        principals: set[str] = set()
+        for w in real_ws:
+            roles = w.roles or []
+            for r in roles:
+                principals.add(r.principal)
+            total_roles += len(roles)
+            admins = [r for r in roles if str(r.role).lower() == "admin"]
+            admins_total += len(admins)
+            if not roles:
+                # Creator is always an admin, so zero readable roles means we could
+                # not read them (needs Fabric admin) rather than genuinely no access.
+                unverifiable += 1
+                findings.append(CapabilityFinding(
+                    category="Access", severity="Medium", target=w.name,
+                    message=f"Role assignments for '{w.name}' could not be read.",
+                    recommendation="Grant the auditor Fabric admin / workspace access to verify migrated access controls."))
+                continue
+            verifiable += 1
+            if not admins:
+                findings.append(CapabilityFinding(
+                    category="Access", severity="High", target=w.name,
+                    message=f"Workspace '{w.name}' has no Admin role assignment.",
+                    recommendation="Assign at least one Admin (prefer an admin group) so the workspace can be governed."))
+            elif len(admins) == 1:
+                findings.append(CapabilityFinding(
+                    category="Access", severity="Low", target=w.name,
+                    message=f"Workspace '{w.name}' has a single admin ({admins[0].principal}).",
+                    recommendation="Add a backup admin or an admin group to avoid a bus-factor risk."))
+            ext = [r for r in roles if "guest" in str(r.principal_type).lower()
+                   or "#ext#" in str(r.principal).lower()]
+            for r in ext:
+                findings.append(CapabilityFinding(
+                    category="Access", severity="Medium", target=w.name,
+                    message=f"Workspace '{w.name}' grants {r.role} to external/guest principal '{r.principal}'.",
+                    recommendation="Confirm external access is intended; prefer internal groups for migrated workloads."))
+        distinct = len(principals)
+        return {
+            "role_assignments": total_roles, "distinct_principals": distinct,
+            "admin_assignments": admins_total, "workspaces_verifiable": verifiable,
+            "workspaces_unverifiable": unverifiable,
+        }
 
     # ---- run --------------------------------------------------------------
     def _inv(self) -> dict:
@@ -428,4 +482,20 @@ def _summary_md(estate: FabricEstate, a: FabricReadinessAssessment) -> str:
         lines.append(f"| {r['source_workspace']} | {r['target_workspace'] or '—'} | "
                      f"{'yes' if r['matched'] else 'no'} | {r['target_item_count']} | "
                      f"{', '.join(r['missing_item_types']) or '—'} |")
+    lines.append("")
+    acc = a.access_summary or {}
+    lines.append("## Access controls (workspace RBAC)")
+    lines.append("")
+    lines.append(f"- Role assignments: **{acc.get('role_assignments', 0)}** across "
+                 f"**{acc.get('distinct_principals', 0)}** principals · "
+                 f"admins: {acc.get('admin_assignments', 0)}")
+    lines.append(f"- Workspaces with verifiable roles: **{acc.get('workspaces_verifiable', 0)}** · "
+                 f"unverifiable (no read access): {acc.get('workspaces_unverifiable', 0)}")
+    lines.append("")
+    lines.append("| Workspace | Principal | Type | Role |")
+    lines.append("|---|---|---|---|")
+    for w in estate.workspaces:
+        for r in (w.roles or []):
+            lines.append(f"| {w.name} | {r.principal} | {r.principal_type} | {r.role} |")
     return "\n".join(lines)
+
