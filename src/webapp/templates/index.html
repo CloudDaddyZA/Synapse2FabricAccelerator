@@ -69,7 +69,7 @@
       <button type="button" onclick="loadFabricMap()">↻ Reload</button>
       <span id="fabmap-saved" class="muted"></span>
     </div>
-    <div id="fabmap-list" class="wsel-list"></div>
+    <div id="fabmap-list" style="display:flex;flex-direction:column;gap:.45rem;margin-top:.5rem"></div>
   </section>
 
   <section class="card">
@@ -262,9 +262,9 @@ async function loadFabricMap(){
   list.innerHTML = sources.map(src => {
     const cur = mapping[src] || '';
     const s = src.replace(/"/g, '&quot;');
-    return `<div class="wsel-item" style="display:flex;align-items:center;gap:.6rem;justify-content:space-between">
-      <span title="${s}">${s}</span>
-      <select data-src="${s}" onchange="saveFabricMap()" style="padding:.3rem;border:1px solid #ccc;border-radius:4px;max-width:260px">
+    return `<div style="display:flex;align-items:center;gap:.7rem">
+      <span title="${s}" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s}</span>
+      <select data-src="${s}" onchange="saveFabricMap()" style="flex:none;padding:.3rem;border:1px solid #ccc;border-radius:4px;min-width:230px;max-width:320px">
         <option value=""${cur?'':' selected'}>— Auto (name match) —</option>${opts(cur)}
       </select></div>`;
   }).join('');
