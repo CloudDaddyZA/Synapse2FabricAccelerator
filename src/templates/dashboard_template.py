@@ -424,8 +424,26 @@ def _fabestate_view(data: dict[str, Any]) -> str:
     roles_tbl = _plain_table("Access controls \u2014 workspace role assignments", role_rows,
                              ["workspace", "principal", "principal_type", "role"], clickable=True)
 
+    # Threat modeling / security posture (workspace 7821, STRIDE)
+    thr = rd.get("threat_summary") or {}
+    thr_card = ''
+    if thr:
+        thr_card = (
+            '<div class="card" style="grid-column:1/-1"><h3>Threat modeling / security posture (STRIDE)</h3>'
+            '<div style="display:flex;gap:2.2rem;flex-wrap:wrap;margin:.2rem 0 .4rem">'
+            f'<div><div class="kpi" style="color:#b00020">{thr.get("external_principals", 0)}</div>External / guest grants</div>'
+            f'<div><div class="kpi" style="color:#d05a00">{thr.get("nonhuman_admins", 0)}</div>Non-human admins</div>'
+            f'<div><div class="kpi" style="color:#c47f00">{thr.get("broad_group_grants", 0)}</div>Broad-group grants</div>'
+            f'<div><div class="kpi" style="color:#c47f00">{thr.get("personal_workspace_items", 0)}</div>Items in personal workspaces</div>'
+            f'<div><div class="kpi" style="color:#667">{thr.get("audit_blind_spots", 0)}</div>RBAC audit blind spots</div>'
+            '</div>'
+            '<p class="muted">Surface scan of estate RBAC + topology mapped to STRIDE (Spoofing / Tampering / '
+            'Repudiation / Information disclosure / Denial of service / Elevation of privilege). See the '
+            '<b>Threat</b> rows in Readiness findings above. Not a substitute for a full threat-modeling workshop '
+            'or tenant security-settings review.</p></div>')
+
     return ('<div class="grid">' + intro + kpis + dcard + caps_tbl
-            + findings_card + cov_tbl + ws_tbl + acc_kpis + roles_tbl + mix_tbl + '</div>')
+            + findings_card + cov_tbl + ws_tbl + acc_kpis + roles_tbl + thr_card + mix_tbl + '</div>')
 
 
 

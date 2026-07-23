@@ -323,6 +323,8 @@ class FabricAuditAgent(BaseAgent):
 
         # Access controls / RBAC parity (workspace 7727)
         access_summary = self._access_findings(estate, findings)
+        # Threat modeling / security posture (workspace 7821)
+        threat_summary = self._threat_findings(estate, findings)
 
         sev = _sev_counts(findings)
         if sev.get("Critical"):
@@ -338,7 +340,7 @@ class FabricAuditAgent(BaseAgent):
             largest_capacity_sku=largest.sku if largest else "",
             largest_capacity_units=largest_cu,
             findings=findings, severity_counts=sev, coverage=coverage,
-            access_summary=access_summary)
+            access_summary=access_summary, threat_summary=threat_summary)
 
     # ---- access controls (RBAC) ------------------------------------------
     @staticmethod
@@ -388,6 +390,67 @@ class FabricAuditAgent(BaseAgent):
             "role_assignments": total_roles, "distinct_principals": distinct,
             "admin_assignments": admins_total, "workspaces_verifiable": verifiable,
             "workspaces_unverifiable": unverifiable,
+        }
+
+    # ---- threat modeling / security posture (STRIDE) ---------------------
+    @staticmethod
+    def _threat_findings(estate: FabricEstate, findings: list[CapabilityFinding]) -> dict:
+        """Data-driven security-posture assessment of the target Fabric estate,
+        mapped to STRIDE. Appends Threat findings and returns a summary. This is a
+        surface scan from the discovered estate (RBAC + topology), not a full
+        STRIDE workshop."""
+        external = nonhuman = personal_items = broad = 0
+        blind_spots = 0
+        for w in estate.workspaces:
+            name = w.name or ""
+            wtype = str(w.type).lower()
+            roles = w.roles or []
+            is_personal = wtype == "personal" or name.strip().lower() == "my workspace"
+
+            # Information disclosure: data assets sitting in a personal workspace.
+            if is_personal and w.item_count > 0:
+                personal_items += w.item_count
+                findings.append(CapabilityFinding(
+                    category="Threat", severity="Medium", target=name,
+                    message=(f"[Information disclosure] {w.item_count} item(s) reside in personal workspace "
+                             f"'{name}', which has no shared RBAC or governance."),
+                    recommendation="Move data assets into a governed, capacity-assigned workspace with role assignments."))
+
+            if not roles:
+                blind_spots += 1
+                continue
+            for r in roles:
+                pname = str(r.principal)
+                pl = pname.lower()
+                ptype = str(r.principal_type).lower()
+                role = str(r.role)
+                is_admin = role.lower() == "admin"
+                # Spoofing/Elevation: external or guest identity.
+                if "guest" in ptype or "#ext#" in pl:
+                    external += 1
+                    findings.append(CapabilityFinding(
+                        category="Threat", severity="High" if is_admin else "Medium", target=name,
+                        message=f"[Spoofing/Elevation] External/guest principal '{pname}' holds {role} on '{name}'.",
+                        recommendation="Remove external access or replace with an internal, governed identity."))
+                # Elevation of privilege: non-human / service identity as Admin.
+                elif is_admin and (pl.startswith(("svc", "sp_", "sp-", "sa_"))
+                                   or "serviceprincipal" in ptype or "service principal" in ptype):
+                    nonhuman += 1
+                    findings.append(CapabilityFinding(
+                        category="Threat", severity="Medium", target=name,
+                        message=f"[Elevation] Non-human/service identity '{pname}' holds Admin on '{name}'.",
+                        recommendation="Apply least privilege (Contributor/Member), use a managed identity, and rotate credentials."))
+                # Elevation: an all-company / everyone group granted access.
+                elif ptype == "group" and any(t in pl for t in ("everyone", "all users", "all company", "all staff", "tenant")):
+                    broad += 1
+                    findings.append(CapabilityFinding(
+                        category="Threat", severity="High", target=name,
+                        message=f"[Elevation] Broad group '{pname}' is granted {role} on '{name}'.",
+                        recommendation="Scope access to a specific team group instead of an all-company group."))
+        return {
+            "external_principals": external, "nonhuman_admins": nonhuman,
+            "personal_workspace_items": personal_items, "broad_group_grants": broad,
+            "audit_blind_spots": blind_spots,
         }
 
     # ---- run --------------------------------------------------------------
@@ -497,5 +560,17 @@ def _summary_md(estate: FabricEstate, a: FabricReadinessAssessment) -> str:
     for w in estate.workspaces:
         for r in (w.roles or []):
             lines.append(f"| {w.name} | {r.principal} | {r.principal_type} | {r.role} |")
+    thr = a.threat_summary or {}
+    lines.append("")
+    lines.append("## Threat modeling / security posture (STRIDE)")
+    lines.append("")
+    lines.append(f"- External/guest grants: **{thr.get('external_principals', 0)}** · "
+                 f"non-human admins: **{thr.get('nonhuman_admins', 0)}** · "
+                 f"broad-group grants: {thr.get('broad_group_grants', 0)}")
+    lines.append(f"- Items in personal workspaces: **{thr.get('personal_workspace_items', 0)}** · "
+                 f"RBAC audit blind spots: {thr.get('audit_blind_spots', 0)}")
+    lines.append("- _Surface scan of estate RBAC + topology mapped to STRIDE \u2014 not a substitute for a full "
+                 "threat-modeling workshop or tenant security-settings review._")
     return "\n".join(lines)
+
 

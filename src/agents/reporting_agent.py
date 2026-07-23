@@ -207,6 +207,15 @@ class ReportingAgent(BaseAgent):
                             [[w.get("name"), r.get("principal"), r.get("principal_type"), r.get("role")]
                              for w in (estate.get("workspaces") or []) for r in (w.get("roles") or [])],
                             "No role assignments readable."))
+        thr = rd.get("threat_summary") or {}
+        lines.append("\n## Threat modeling / security posture (STRIDE)\n")
+        lines.append(f"External/guest grants: **{thr.get('external_principals', 0)}**, "
+                     f"non-human admins: **{thr.get('nonhuman_admins', 0)}**, "
+                     f"broad-group grants: {thr.get('broad_group_grants', 0)}, "
+                     f"items in personal workspaces: **{thr.get('personal_workspace_items', 0)}**, "
+                     f"RBAC audit blind spots: {thr.get('audit_blind_spots', 0)}. "
+                     f"See the **Threat** rows in Readiness findings. _Surface scan mapped to STRIDE \u2014 not a "
+                     f"full threat-modeling workshop or tenant security-settings review._\n")
         return "\n".join(lines)
 
     def _risk_register(self, scores) -> str:
