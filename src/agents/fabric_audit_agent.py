@@ -88,19 +88,19 @@ class FabricAuditAgent(BaseAgent):
         cap_filter = {n for n in self.settings.fabric_capacity_names}
         ws_filter = {n for n in self.settings.fabric_workspace_names}
 
-        # Capacities
+        # Capacities — always list all; the filter only marks in-scope so the
+        # picker never loses options when a subset is selected.
         cap_by_id: dict[str, FabricCapacity] = {}
         try:
             for c in client.capacities():
                 name = c.get("displayName", "") or c.get("name", "")
-                if cap_filter and name not in cap_filter:
-                    continue
                 sku = c.get("sku", "") or ((c.get("properties") or {}).get("sku") or "")
                 cap = FabricCapacity(
                     id=c.get("id", ""), display_name=name, sku=sku,
                     region=c.get("region", ""), state=c.get("state", ""),
                     admins=list(c.get("admins") or []),
                     capacity_units=sku_to_cu(sku),
+                    in_scope=(not cap_filter) or (name in cap_filter),
                 )
                 estate.capacities.append(cap)
                 cap_by_id[cap.id] = cap
@@ -110,16 +110,13 @@ class FabricAuditAgent(BaseAgent):
             estate.errors.append(f"capacities: {exc}")
             self.logger.warning("Fabric capacity discovery failed: %s", exc)
 
-        # Workspaces
+        # Workspaces — always list all; the workspace filter only marks in-scope
+        # (deeply audited). Options therefore persist across runs even if a
+        # subset is selected.
         try:
             for w in client.workspaces():
                 name = w.get("displayName", "") or w.get("name", "")
-                if ws_filter and name not in ws_filter:
-                    continue
                 cid = w.get("capacityId", "") or ""
-                # When a capacity filter is set, only audit workspaces on those capacities.
-                if cap_filter and cid not in cap_by_id:
-                    continue
                 cap = cap_by_id.get(cid)
                 ws = FabricWorkspace(
                     id=w.get("id", ""), name=name, description=w.get("description", ""),
@@ -127,6 +124,7 @@ class FabricAuditAgent(BaseAgent):
                     capacity_sku=cap.sku if cap else "",
                     capacity_region=cap.region if cap else "",
                     on_dedicated_capacity=bool(cid),
+                    in_scope=(not ws_filter) or (name in ws_filter),
                 )
                 estate.workspaces.append(ws)
             estate.accessible = True
@@ -135,9 +133,10 @@ class FabricAuditAgent(BaseAgent):
             estate.errors.append(f"workspaces: {exc}")
             self.logger.warning("Fabric workspace discovery failed: %s", exc)
 
-        # Items + roles per workspace (best-effort per workspace)
+        # Items + roles are enumerated only for in-scope workspaces (the
+        # expensive calls); out-of-scope workspaces stay listed but un-audited.
         for ws in estate.workspaces:
-            if not ws.id:
+            if not ws.id or not ws.in_scope:
                 continue
             try:
                 items = client.workspace_items(ws.id)
@@ -226,13 +225,15 @@ class FabricAuditAgent(BaseAgent):
             if tgt is None:
                 tgt = by_norm.get(_norm(src))
             expected = sorted({_EXPECTED_ITEM[k] for k in _EXPECTED_ITEM if w.get(k)})
-            present = sorted(items_by_ws.get(tgt.id, set()) & set(expected)) if tgt else []
-            missing = sorted(set(expected) - set(present))
+            audited = bool(tgt and tgt.in_scope)
+            present = sorted(items_by_ws.get(tgt.id, set()) & set(expected)) if audited else []
+            missing = sorted(set(expected) - set(present)) if audited else []
             rows.append({
                 "source_workspace": src,
                 "target_workspace": tgt.name if tgt else "",
                 "matched": bool(tgt),
                 "mapped": bool(mapped_name),
+                "audited": audited,
                 "target_item_count": tgt.item_count if tgt else 0,
                 "expected_item_types": expected,
                 "present_item_types": present,
@@ -245,7 +246,8 @@ class FabricAuditAgent(BaseAgent):
         demand = self._demand(inv)
         coverage = self._coverage(inv, estate)
         findings: list[CapabilityFinding] = []
-        active_caps = [c for c in estate.capacities if str(c.state).lower() in ("active", "")]
+        active_caps = [c for c in estate.capacities
+                       if str(c.state).lower() in ("active", "") and c.in_scope]
         largest = max(active_caps, key=lambda c: c.capacity_units, default=None)
         largest_cu = largest.capacity_units if largest else 0
 
@@ -264,7 +266,7 @@ class FabricAuditAgent(BaseAgent):
                 message="No Fabric capacity is visible in the target tenant.",
                 recommendation="Provision an F-SKU capacity (Fabric) sized at or above the recommended SKU."))
         else:
-            paused = [c for c in estate.capacities if str(c.state).lower() == "paused"]
+            paused = [c for c in estate.capacities if str(c.state).lower() == "paused" and c.in_scope]
             for c in paused:
                 findings.append(CapabilityFinding(
                     category="Capacity", severity="High", target=c.display_name,
@@ -298,7 +300,7 @@ class FabricAuditAgent(BaseAgent):
         # Region alignment
         src_regions = {str(w.get("workspace", {}).get("location", "")).lower().replace(" ", "")
                        for w in inv.get("workspaces", []) if w.get("workspace", {}).get("location")}
-        cap_regions = {str(c.region).lower().replace(" ", "") for c in estate.capacities if c.region}
+        cap_regions = {str(c.region).lower().replace(" ", "") for c in estate.capacities if c.region and c.in_scope}
         if src_regions and cap_regions and not (src_regions & cap_regions):
             findings.append(CapabilityFinding(
                 category="Region", severity="Medium",
@@ -308,7 +310,7 @@ class FabricAuditAgent(BaseAgent):
 
         # Dedicated capacity
         no_cap = [w for w in estate.workspaces if not w.on_dedicated_capacity
-                  and str(w.type).lower() in ("workspace", "")]
+                  and w.in_scope and str(w.type).lower() in ("workspace", "")]
         for w in no_cap:
             findings.append(CapabilityFinding(
                 category="Workspace", severity="Medium", target=w.name,
@@ -357,7 +359,8 @@ class FabricAuditAgent(BaseAgent):
         """Assess whether workspace access controls are appropriate (least privilege,
         admin coverage, no unverifiable/guest access). Appends Access findings and
         returns a summary."""
-        real_ws = [w for w in estate.workspaces if str(w.type).lower() in ("workspace", "")]
+        real_ws = [w for w in estate.workspaces
+                   if str(w.type).lower() in ("workspace", "") and w.in_scope]
         total_roles = distinct = admins_total = verifiable = unverifiable = 0
         principals: set[str] = set()
         for w in real_ws:
@@ -411,6 +414,8 @@ class FabricAuditAgent(BaseAgent):
         external = nonhuman = personal_items = broad = 0
         blind_spots = 0
         for w in estate.workspaces:
+            if not w.in_scope:
+                continue
             name = w.name or ""
             wtype = str(w.type).lower()
             roles = w.roles or []

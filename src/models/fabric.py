@@ -19,6 +19,7 @@ class FabricCapacity(BaseModel):
     state: str = ""         # Active / Paused / Provisioning / ...
     admins: list[str] = Field(default_factory=list)
     capacity_units: int = 0  # resolved from SKU (F64 -> 64)
+    in_scope: bool = True    # whether it passes the configured capacity filter
 
 
 class FabricRoleAssignment(BaseModel):
@@ -41,6 +42,7 @@ class FabricWorkspace(BaseModel):
     item_count: int = 0
     roles: list[FabricRoleAssignment] = Field(default_factory=list)
     accessible: bool = True
+    in_scope: bool = True     # whether it passes the configured workspace filter (deeply audited)
 
 
 class FabricItem(BaseModel):
